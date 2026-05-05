@@ -74,4 +74,13 @@ describe("BroadcastPage", () => {
     expect(screen.getByText("앱을 열어두는 동안만 위치가 전송됩니다.")).toBeTruthy();
     expect(screen.getByText("화면을 잠그거나 앱을 닫으면 업데이트가 멈출 수 있습니다.")).toBeTruthy();
   });
+
+  it("uses plain Korean sender copy without technical GPS or ID labels", () => {
+    renderBroadcastPage();
+
+    expect(screen.getByText("공유 코드: session_1")).toBeTruthy();
+    expect(screen.getByText("위치 확인 전")).toBeTruthy();
+    expect(screen.queryByText(/GPS/)).toBeNull();
+    expect(screen.queryByText(/ID/)).toBeNull();
+  });
 });

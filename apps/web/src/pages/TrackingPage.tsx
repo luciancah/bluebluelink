@@ -290,7 +290,7 @@ function getRouteSummary({
       primary: `직선거리 ${formatDistance(
         getStraightLineDistanceMeters(fallbackRoute[0], fallbackRoute[1]),
       )}`,
-      distance: "교통 ETA 확인 실패",
+      distance: "예상 시간 확인 실패",
       detail: destinationName ?? "목적지까지 직선거리만 표시",
     };
   }

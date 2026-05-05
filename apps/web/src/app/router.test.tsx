@@ -49,7 +49,7 @@ describe("BlueBlueLink routes", () => {
     renderPath("/broadcast/demo-session");
 
     expect(screen.getByRole("heading", { name: "위치 공유 중" })).toBeTruthy();
-    expect(screen.getByText("공유 ID: demo-session")).toBeTruthy();
+    expect(screen.getByText("공유 코드: demo-session")).toBeTruthy();
   });
 
   it("renders the public tracking shell", () => {

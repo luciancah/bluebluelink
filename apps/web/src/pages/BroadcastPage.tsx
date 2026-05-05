@@ -27,7 +27,7 @@ export function BroadcastPage() {
       <footer className="bottom-panel broadcast-panel">
         <div className="broadcast-panel__summary">
           <div>
-            <p>공유 ID: {id}</p>
+            <p>공유 코드: {id}</p>
             <p className="muted">{statusCopy.label}</p>
           </div>
           <div className="broadcast-contract" role="note">
@@ -63,8 +63,8 @@ function getBroadcastStatusCopy(status: BroadcastStatus) {
   switch (status) {
     case "gps-checking":
       return {
-        label: "GPS 확인 중",
-        description: "현재 위치 권한과 GPS 신호를 확인하고 있습니다.",
+        label: "위치 확인 중",
+        description: "위치 권한과 현재 위치 신호를 확인하고 있습니다.",
       };
     case "sending":
       return {
@@ -109,8 +109,8 @@ function getBroadcastStatusCopy(status: BroadcastStatus) {
     case "idle":
     default:
       return {
-        label: "GPS 확인 전",
-        description: "위치 전송 시작을 누르면 GPS 공유가 시작됩니다.",
+        label: "위치 확인 전",
+        description: "위치 전송 시작을 누르면 공유가 시작됩니다.",
       };
   }
 }

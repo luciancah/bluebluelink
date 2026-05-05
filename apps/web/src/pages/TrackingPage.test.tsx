@@ -381,7 +381,8 @@ describe("TrackingPage", () => {
     renderTrackingPage();
 
     expect(await screen.findByText(/직선거리/)).toBeTruthy();
-    expect(screen.getByText("교통 ETA 확인 실패")).toBeTruthy();
+    expect(screen.getByText("예상 시간 확인 실패")).toBeTruthy();
+    expect(screen.queryByText(/ETA/)).toBeNull();
   });
 });
 
