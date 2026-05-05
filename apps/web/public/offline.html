@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2563eb" />
+    <title>진형링크 오프라인</title>
+    <style>
+      :root {
+        color: #0f172a;
+        background: #f8fafc;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      body {
+        display: grid;
+        min-height: 100svh;
+        margin: 0;
+        place-items: center;
+      }
+
+      main {
+        width: min(100% - 48px, 420px);
+      }
+
+      .mark {
+        display: grid;
+        width: 72px;
+        height: 72px;
+        margin-bottom: 24px;
+        place-items: center;
+        border-radius: 20px;
+        background: #2563eb;
+        color: white;
+        font-size: 34px;
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 0;
+        color: #64748b;
+        font-size: 17px;
+        line-height: 1.65;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark" aria-hidden="true">J</div>
+      <h1>오프라인입니다</h1>
+      <p>실시간 위치, 경로, 도착 예정 시간은 연결 후 다시 업데이트됩니다.</p>
+    </main>
+  </body>
+</html>
