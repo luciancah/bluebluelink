@@ -1,4 +1,5 @@
 import type { RouteObject } from "react-router-dom";
+import { AuthGate } from "../features/auth/AuthGate";
 import { BroadcastPage } from "../pages/BroadcastPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { TrackingPage } from "../pages/TrackingPage";
@@ -6,7 +7,11 @@ import { TrackingPage } from "../pages/TrackingPage";
 export const routes: RouteObject[] = [
   {
     path: "/",
-    element: <DashboardPage />,
+    element: (
+      <AuthGate>
+        <DashboardPage />
+      </AuthGate>
+    ),
   },
   {
     path: "/broadcast/:id",

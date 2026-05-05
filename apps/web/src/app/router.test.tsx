@@ -1,21 +1,48 @@
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { routes } from "./router";
 
 function renderPath(path: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
   const router = createMemoryRouter(routes, {
     initialEntries: [path],
   });
 
-  render(<RouterProvider router={router} />);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("BlueBlueLink routes", () => {
-  it("renders the owner dashboard shell", () => {
+  it("renders the owner dashboard shell", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          user: {
+            id: "user_1",
+            email: "driver@example.com",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
     renderPath("/");
 
-    expect(screen.getByRole("heading", { name: "내 위치 공유" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "내 위치 공유" })).toBeTruthy();
   });
 
   it("renders the sender broadcast shell", () => {

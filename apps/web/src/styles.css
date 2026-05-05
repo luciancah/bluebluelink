@@ -129,8 +129,63 @@ button {
 }
 
 .empty-state,
-.tracking-summary {
+.tracking-summary,
+.auth-panel {
   padding: 20px;
+}
+
+.auth-shell {
+  display: grid;
+  place-items: center;
+}
+
+.auth-panel {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
+}
+
+.auth-panel h1 {
+  margin: 8px 0 0;
+  font-size: 2rem;
+  letter-spacing: 0;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 8px;
+  color: #111827;
+  font-weight: 800;
+}
+
+.auth-form input {
+  min-height: 48px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #111827;
+  background: #ffffff;
+  font: inherit;
+}
+
+.auth-form input:focus {
+  border-color: #2563eb;
+  outline: 2px solid rgb(37 99 235 / 18%);
+  outline-offset: 2px;
+}
+
+.form-error {
+  margin: 0;
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .live-shell {
