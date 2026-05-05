@@ -115,7 +115,7 @@ export async function registerShareSessionRoutes(
   );
 }
 
-function toOwnerSessionDto(session: StoredShareSession) {
+export function toOwnerSessionDto(session: StoredShareSession) {
   return {
     id: session.id,
     sessionCode: session.sessionCode,

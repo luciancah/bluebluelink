@@ -38,6 +38,16 @@ export interface ShareSessionRepository extends ShareSessionAccessRepository {
   listByOwner(ownerId: string, now: Date): Promise<StoredShareSession[]>;
   stop(id: string, ownerId: string): Promise<StoredShareSession | null>;
   delete(id: string, ownerId: string): Promise<boolean>;
+  updateLocation(
+    id: string,
+    ownerId: string,
+    input: {
+      latitude: number;
+      longitude: number;
+      accuracyMeters: number;
+      capturedAt: Date;
+    },
+  ): Promise<StoredShareSession | null>;
 }
 
 export class InMemoryShareSessionRepository implements ShareSessionRepository {
@@ -102,6 +112,34 @@ export class InMemoryShareSessionRepository implements ShareSessionRepository {
     }
 
     return this.sessions.delete(id);
+  }
+
+  async updateLocation(
+    id: string,
+    ownerId: string,
+    input: {
+      latitude: number;
+      longitude: number;
+      accuracyMeters: number;
+      capturedAt: Date;
+    },
+  ): Promise<StoredShareSession | null> {
+    const session = this.sessions.get(id);
+
+    if (!session || session.ownerId !== ownerId || session.status !== "active") {
+      return null;
+    }
+
+    const updated = {
+      ...session,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      accuracyMeters: input.accuracyMeters,
+      lastUpdatedLocation: input.capturedAt,
+      updatedAt: new Date(),
+    };
+    this.sessions.set(id, updated);
+    return updated;
   }
 
   async isOwner(sessionId: string, userId: string): Promise<boolean> {

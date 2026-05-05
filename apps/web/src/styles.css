@@ -338,9 +338,24 @@ button {
   padding: 16px;
 }
 
+.broadcast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 @media (max-width: 420px) {
   .bottom-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .broadcast-actions {
+    justify-content: stretch;
+  }
+
+  .broadcast-actions > button {
+    width: 100%;
   }
 }
