@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useLocationBroadcast } from "./useLocationBroadcast";
 
@@ -48,6 +49,16 @@ afterEach(() => {
 });
 
 describe("useLocationBroadcast", () => {
+  it("keeps an untouched sender idle during React StrictMode mount checks", () => {
+    render(
+      <StrictMode>
+        <BroadcastStatusProbe />
+      </StrictMode>,
+    );
+
+    expect(screen.getByText("idle")).toBeTruthy();
+  });
+
   it("marks insecure contexts unavailable before watching GPS", async () => {
     mockSecureContext(false);
     const { result } = renderHook(() => useLocationBroadcast("session_1"));
@@ -132,3 +143,9 @@ describe("useLocationBroadcast", () => {
     expect(result.current.status).toBe("denied");
   });
 });
+
+function BroadcastStatusProbe() {
+  const broadcast = useLocationBroadcast("session_1");
+
+  return <p>{broadcast.status}</p>;
+}

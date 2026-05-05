@@ -59,6 +59,8 @@ describe("BroadcastPage", () => {
 
     renderBroadcastPage();
 
+    expect(screen.getByRole("region", { name: "지도" })).toBeTruthy();
+
     await userEvent.click(screen.getByRole("button", { name: "위치 전송 시작" }));
 
     await waitFor(() => {

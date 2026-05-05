@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LockKeyhole, MapPin, Radio, ShieldAlert } from "lucide-react";
+import { LockKeyhole, Radio, ShieldAlert } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { SharedMap, type MapPoint } from "../components/map/SharedMap";
 import { Button } from "../components/ui/button";
 import {
   getPublicTrackingSession,
@@ -9,6 +10,8 @@ import {
   verifyTrackingPin,
 } from "../features/tracking/trackingApi";
 import { usePublicTrackingRealtime } from "../features/tracking/usePublicTrackingRealtime";
+
+const EMPTY_MAP_ROUTE: MapPoint[] = [];
 
 export function TrackingPage() {
   const { code } = useParams<{ code: string }>();
@@ -41,7 +44,6 @@ export function TrackingPage() {
     typeof session?.latitude === "number" && typeof session.longitude === "number"
       ? formatCoordinates(session.latitude, session.longitude)
       : null;
-  const hasLocation = coordinates !== null;
   const isPinRequired = Boolean(trackingQuery.data?.pinRequired || session?.pinRequired);
   const realtimeStatus = usePublicTrackingRealtime({
     code: trackingCode,
@@ -53,6 +55,18 @@ export function TrackingPage() {
     queryKey: trackingQueryKey,
   });
   const statusCopy = getTrackingStatusCopy(session, Date.now());
+  const vehiclePoint = useMemo(
+    () => getVehiclePoint(session),
+    [session?.latitude, session?.longitude],
+  );
+  const destinationPoint = useMemo(
+    () => getDestinationPoint(session),
+    [session?.destinationLat, session?.destinationLng, session?.destinationName],
+  );
+  const mapRoute = useMemo(
+    () => (vehiclePoint && destinationPoint ? [vehiclePoint, destinationPoint] : EMPTY_MAP_ROUTE),
+    [destinationPoint, vehiclePoint],
+  );
   const refetchTracking = trackingQuery.refetch;
 
   useEffect(() => {
@@ -121,15 +135,13 @@ export function TrackingPage() {
           </form>
         </section>
       ) : (
-        <section className="map-placeholder" aria-label="지도 자리">
-          {hasLocation ? (
-            <div className="vehicle-marker">
-              <MapPin size={28} aria-hidden="true" />
-            </div>
-          ) : (
-            <p className="muted">위치 표시 대기 중</p>
-          )}
-        </section>
+        <SharedMap
+          accuracyMeters={session?.accuracyMeters ?? null}
+          destination={destinationPoint}
+          isStale={statusCopy.label === "업데이트 지연"}
+          route={mapRoute}
+          vehicle={vehiclePoint}
+        />
       )}
 
       <footer className="bottom-panel">
@@ -214,4 +226,30 @@ function getTrackingStatusCopy(session: PublicTrackingSession | undefined, now: 
 
 function formatCoordinates(latitude: number, longitude: number) {
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+function getVehiclePoint(session: PublicTrackingSession | undefined): MapPoint | null {
+  if (typeof session?.latitude !== "number" || typeof session.longitude !== "number") {
+    return null;
+  }
+
+  return {
+    lat: session.latitude,
+    lng: session.longitude,
+  };
+}
+
+function getDestinationPoint(session: PublicTrackingSession | undefined): MapPoint | null {
+  if (
+    typeof session?.destinationLat !== "number" ||
+    typeof session.destinationLng !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    lat: session.destinationLat,
+    lng: session.destinationLng,
+    label: session.destinationName ?? undefined,
+  };
 }

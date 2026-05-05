@@ -338,29 +338,132 @@ button {
   flex: 0 0 auto;
 }
 
-.map-placeholder {
-  display: grid;
+.shared-map {
+  position: relative;
   min-height: 420px;
-  place-items: center;
+  overflow: hidden;
   border-block: 1px solid #e5e7eb;
-  background:
-    linear-gradient(90deg, rgb(148 163 184 / 16%) 1px, transparent 1px),
-    linear-gradient(rgb(148 163 184 / 16%) 1px, transparent 1px),
-    #f8fafc;
-  background-size: 36px 36px;
+  background: #eef2f7;
+  isolation: isolate;
 }
 
-.vehicle-marker {
+.shared-map__surface {
+  position: absolute;
+  inset: 0;
+  background: #edf3f1;
+}
+
+.shared-map[data-provider="fallback"] .shared-map__surface {
+  background:
+    linear-gradient(30deg, transparent 0 45%, rgb(203 213 225 / 70%) 45% 48%, transparent 48%),
+    linear-gradient(120deg, transparent 0 38%, rgb(203 213 225 / 72%) 38% 41%, transparent 41%),
+    linear-gradient(90deg, transparent 0 48%, rgb(226 232 240 / 88%) 48% 53%, transparent 53%),
+    linear-gradient(rgb(148 163 184 / 14%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(148 163 184 / 14%) 1px, transparent 1px),
+    #f8fafc;
+  background-size:
+    290px 290px,
+    260px 260px,
+    210px 210px,
+    42px 42px,
+    42px 42px,
+    auto;
+}
+
+.shared-map[data-provider="fallback"] .shared-map__surface::before,
+.shared-map[data-provider="fallback"] .shared-map__surface::after {
+  position: absolute;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  font-weight: 800;
+  opacity: 0.75;
+  text-shadow: 0 1px 0 #ffffff;
+  transform: rotate(-18deg);
+}
+
+.shared-map[data-provider="fallback"] .shared-map__surface::before {
+  top: 23%;
+  left: 12%;
+  content: "강남대로";
+}
+
+.shared-map[data-provider="fallback"] .shared-map__surface::after {
+  right: 12%;
+  bottom: 28%;
+  content: "테헤란로";
+}
+
+.shared-map__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.shared-map__marker {
+  position: absolute;
   display: grid;
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
+  min-width: 48px;
+  min-height: 48px;
   place-items: center;
+  border: 4px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 16px 30px rgb(15 23 42 / 18%);
+  pointer-events: auto;
+}
+
+.shared-map__marker--vehicle {
+  top: 52%;
+  left: 50%;
   color: #ffffff;
   background: #2563eb;
-  border: 5px solid #ffffff;
-  border-radius: 999px;
-  box-shadow: 0 16px 30px rgb(37 99 235 / 24%);
-  font-weight: 900;
+  transform: translate(-50%, -50%);
+}
+
+.shared-map__marker--viewer {
+  top: 60%;
+  left: 41%;
+  width: 50px;
+  height: 50px;
+  color: #ffffff;
+  background: #16a34a;
+  transform: translate(-50%, -50%);
+}
+
+.shared-map__marker--destination {
+  top: 36%;
+  left: 64%;
+  color: #ffffff;
+  background: #e11d48;
+  transform: translate(-50%, -50%);
+}
+
+.shared-map__status {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.shared-map__status span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #334155;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 10%);
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .bottom-panel {

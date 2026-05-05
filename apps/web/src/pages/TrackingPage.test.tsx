@@ -284,11 +284,38 @@ describe("TrackingPage", () => {
 
     renderTrackingPage();
 
-    const staleCopy = await screen.findByText("업데이트 지연");
+    const staleCopy = (await screen.findAllByText("업데이트 지연"))[0];
     const coordinates = screen.getByText("37.389800, 126.952780");
     expect(staleCopy.compareDocumentPosition(coordinates)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+  });
+
+  it("renders the shared map with destination, route, accuracy, and stale state", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-05-05T10:05:00.000Z").getTime());
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          session: trackingSession({
+            destinationName: "강남역",
+            destinationLat: 37.4979,
+            destinationLng: 127.0276,
+            lastUpdatedLocation: "2026-05-05T10:00:00.000Z",
+          }),
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    renderTrackingPage();
+
+    expect(await screen.findByRole("region", { name: "지도" })).toBeTruthy();
+    expect(await screen.findByText("37.389800, 126.952780")).toBeTruthy();
+    expect(screen.getByLabelText("차량 위치")).toBeTruthy();
+    expect(screen.getByLabelText("목적지: 강남역")).toBeTruthy();
+    expect(screen.getByText("정확도 18m")).toBeTruthy();
+    expect(screen.getAllByText("업데이트 지연").length).toBeGreaterThan(0);
+    expect(screen.getByText("경로 2개 지점")).toBeTruthy();
   });
 });
 

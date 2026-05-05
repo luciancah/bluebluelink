@@ -27,7 +27,10 @@ export function useLocationBroadcast(sessionId: string | undefined) {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const activeRef = useRef(false);
 
-  const stop = useCallback(async () => {
+  const stop = useCallback(async ({ markStopped = true } = {}) => {
+    const hadActiveBroadcast =
+      activeRef.current || watchIdRef.current !== null || wakeLockRef.current !== null;
+
     activeRef.current = false;
 
     if (watchIdRef.current !== null && navigator.geolocation) {
@@ -40,7 +43,9 @@ export function useLocationBroadcast(sessionId: string | undefined) {
       wakeLockRef.current = null;
     }
 
-    setStatus("stopped");
+    if (markStopped || hadActiveBroadcast) {
+      setStatus("stopped");
+    }
   }, []);
 
   const sendPosition = useCallback(
@@ -118,7 +123,7 @@ export function useLocationBroadcast(sessionId: string | undefined) {
 
   useEffect(() => {
     return () => {
-      void stop();
+      void stop({ markStopped: false });
     };
   }, [stop]);
 

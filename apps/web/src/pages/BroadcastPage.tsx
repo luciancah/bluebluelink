@@ -1,5 +1,6 @@
 import { Radio, Square } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { SharedMap } from "../components/map/SharedMap";
 import { Button } from "../components/ui/button";
 import {
   useLocationBroadcast,
@@ -21,9 +22,7 @@ export function BroadcastPage() {
         <Radio className="status-icon" size={28} aria-label="공유 중" />
       </header>
 
-      <section className="map-placeholder" aria-label="지도 자리">
-        <div className="vehicle-marker">차</div>
-      </section>
+      <SharedMap isStale={broadcast.status === "delayed"} />
 
       <footer className="bottom-panel">
         <div>
