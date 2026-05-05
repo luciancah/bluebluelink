@@ -1,10 +1,11 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import { InMemorySessionStore, type SessionStore } from "./auth/sessionStore";
 import { loadConfig, type AppConfig } from "./config";
 import { registerHealthRoutes } from "./routes/health";
 import { registerAuthRoutes } from "./routes/auth";
+import { InMemoryRateLimiter, type RateLimiter } from "./security/rateLimiter";
 import {
   denyAllShareSessionAccess,
   type ShareSessionAccessRepository,
@@ -31,6 +32,7 @@ export type ServerDependencies = {
   shareSessions?: ShareSessionRepository;
   shareSessionAccess?: ShareSessionAccessRepository;
   shareSessionRealtime?: ShareSessionRealtime<PublicTrackingEvent>;
+  publicRateLimiter?: RateLimiter;
 };
 
 export function buildServer(
@@ -38,7 +40,8 @@ export function buildServer(
   dependencies: ServerDependencies = {},
 ) {
   const server = Fastify({
-    logger: config.NODE_ENV !== "test",
+    logger: buildLoggerOptions(config.NODE_ENV),
+    trustProxy: true,
   });
   const sessions = dependencies.sessions ?? new InMemorySessionStore();
   const shareSessions =
@@ -47,6 +50,21 @@ export function buildServer(
     dependencies.shareSessionAccess ?? shareSessions ?? denyAllShareSessionAccess;
   const shareSessionRealtime =
     dependencies.shareSessionRealtime ?? new InMemoryShareSessionRealtime<PublicTrackingEvent>();
+  const publicRateLimiter =
+    dependencies.publicRateLimiter ?? new InMemoryRateLimiter();
+
+  server.addHook("onRequest", async (request, reply) => {
+    if (config.NODE_ENV !== "production" || isHttpsRequest(request)) {
+      return;
+    }
+
+    return reply.code(426).send({
+      error: {
+        code: "HTTPS_REQUIRED",
+        message: "HTTPS 연결이 필요합니다.",
+      },
+    });
+  });
 
   server.register(cors, {
     origin: config.WEB_ORIGIN,
@@ -76,7 +94,30 @@ export function buildServer(
   server.register(registerPublicTrackingRoutes, {
     shareSessions,
     shareSessionRealtime,
+    publicRateLimiter,
   });
 
   return server;
+}
+
+export function buildLoggerOptions(environment: AppConfig["NODE_ENV"]) {
+  if (environment === "test") {
+    return false;
+  }
+
+  return {
+    redact: [
+      "req.body.latitude",
+      "req.body.longitude",
+      "req.body.pinCode",
+      "req.body.capturedAt",
+    ],
+  };
+}
+
+function isHttpsRequest(request: FastifyRequest) {
+  const forwardedProto = request.headers["x-forwarded-proto"];
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+
+  return proto?.split(",")[0]?.trim() === "https" || request.protocol === "https";
 }

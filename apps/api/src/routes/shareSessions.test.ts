@@ -49,12 +49,13 @@ async function buildLoggedInServer() {
   return {
     server,
     cookie: rawCookie.split(";")[0],
+    shareSessions,
   };
 }
 
 describe("share session routes", () => {
   it("creates and lists share sessions for the owner", async () => {
-    const { server, cookie } = await buildLoggedInServer();
+    const { server, cookie, shareSessions } = await buildLoggedInServer();
 
     const create = await server.inject({
       method: "POST",
@@ -77,6 +78,12 @@ describe("share session routes", () => {
       }),
     });
     expect(create.json().session.pinCodeHash).toBeUndefined();
+    const stored = await shareSessions.findByCode(
+      create.json().session.sessionCode,
+      new Date(),
+    );
+    expect(stored?.pinCodeHash).toBeTruthy();
+    expect(stored?.pinCodeHash).not.toBe("1234");
 
     const list = await server.inject({
       method: "GET",

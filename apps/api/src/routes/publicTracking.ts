@@ -1,11 +1,30 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { verifyPassword } from "../auth/password";
+import type { RateLimiter } from "../security/rateLimiter";
 import type {
   ShareSessionRepository,
   StoredShareSession,
 } from "../sessions/shareSessionRepository";
 import type { ShareSessionRealtime } from "../sessions/shareSessionRealtime";
+
+export const PUBLIC_CODE_LOOKUP_LIMIT = 60;
+export const PUBLIC_PIN_ATTEMPT_LIMIT = 5;
+
+const PUBLIC_CODE_LOOKUP_WINDOW_MS = 60 * 1000;
+const PUBLIC_PIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const rateLimitedError = {
+  code: "RATE_LIMITED",
+  message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+};
+const unavailableLinkError = {
+  code: "TRACKING_LINK_UNAVAILABLE",
+  message: "위치 공유를 확인할 수 없습니다.",
+};
+const invalidPinOrLinkError = {
+  code: "INVALID_PIN_OR_LINK",
+  message: "PIN 코드 또는 공유 링크를 확인해 주세요.",
+};
 
 const codeParamsSchema = z.object({
   code: z.string().min(6).max(16),
@@ -19,18 +38,30 @@ export async function registerPublicTrackingRoutes(
   dependencies: {
     shareSessions: ShareSessionRepository;
     shareSessionRealtime: ShareSessionRealtime<PublicTrackingEvent>;
+    publicRateLimiter: RateLimiter;
   },
 ) {
   server.get("/api/public/share-sessions/:code", async (request, reply) => {
     const params = codeParamsSchema.parse(request.params);
+    if (
+      enforceRateLimit({
+        code: params.code,
+        keyPrefix: "public-code",
+        limit: PUBLIC_CODE_LOOKUP_LIMIT,
+        rateLimiter: dependencies.publicRateLimiter,
+        reply,
+        request,
+        windowMs: PUBLIC_CODE_LOOKUP_WINDOW_MS,
+      })
+    ) {
+      return reply;
+    }
+
     const session = await dependencies.shareSessions.findByCode(params.code, new Date());
 
     if (!session) {
       return reply.code(404).send({
-        error: {
-          code: "SHARE_SESSION_NOT_FOUND",
-          message: "위치 공유를 찾을 수 없습니다.",
-        },
+        error: unavailableLinkError,
       });
     }
 
@@ -48,6 +79,20 @@ export async function registerPublicTrackingRoutes(
 
   server.post("/api/public/share-sessions/:code/verify-pin", async (request, reply) => {
     const params = codeParamsSchema.parse(request.params);
+    if (
+      enforceRateLimit({
+        code: params.code,
+        keyPrefix: "public-pin",
+        limit: PUBLIC_PIN_ATTEMPT_LIMIT,
+        rateLimiter: dependencies.publicRateLimiter,
+        reply,
+        request,
+        windowMs: PUBLIC_PIN_ATTEMPT_WINDOW_MS,
+      })
+    ) {
+      return reply;
+    }
+
     const parsed = pinSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -62,24 +107,14 @@ export async function registerPublicTrackingRoutes(
     const session = await dependencies.shareSessions.findByCode(params.code, new Date());
 
     if (!session) {
-      return reply.code(404).send({
-        error: {
-          code: "SHARE_SESSION_NOT_FOUND",
-          message: "위치 공유를 찾을 수 없습니다.",
-        },
-      });
+      return sendInvalidPinOrLink(reply);
     }
 
     if (
       session.pinCodeHash &&
       !(await verifyPassword(parsed.data.pinCode, session.pinCodeHash))
     ) {
-      return reply.code(401).send({
-        error: {
-          code: "INVALID_PIN",
-          message: "PIN 코드가 올바르지 않습니다.",
-        },
-      });
+      return sendInvalidPinOrLink(reply);
     }
 
     reply.setCookie(trackingAccessCookieName(params.code), params.code, {
@@ -96,14 +131,25 @@ export async function registerPublicTrackingRoutes(
 
   server.get("/api/public/share-sessions/:code/events", async (request, reply) => {
     const params = codeParamsSchema.parse(request.params);
+    if (
+      enforceRateLimit({
+        code: params.code,
+        keyPrefix: "public-code",
+        limit: PUBLIC_CODE_LOOKUP_LIMIT,
+        rateLimiter: dependencies.publicRateLimiter,
+        reply,
+        request,
+        windowMs: PUBLIC_CODE_LOOKUP_WINDOW_MS,
+      })
+    ) {
+      return reply;
+    }
+
     const session = await dependencies.shareSessions.findByCode(params.code, new Date());
 
     if (!session) {
       return reply.code(404).send({
-        error: {
-          code: "SHARE_SESSION_NOT_FOUND",
-          message: "위치 공유를 찾을 수 없습니다.",
-        },
+        error: unavailableLinkError,
       });
     }
 
@@ -204,4 +250,46 @@ function hasTrackingAccessCookie(request: FastifyRequest, code: string) {
 
   const unsigned = request.unsignCookie(rawCookie);
   return unsigned.valid && unsigned.value === code;
+}
+
+function enforceRateLimit({
+  code,
+  keyPrefix,
+  limit,
+  rateLimiter,
+  reply,
+  request,
+  windowMs,
+}: {
+  code: string;
+  keyPrefix: string;
+  limit: number;
+  rateLimiter: RateLimiter;
+  reply: FastifyReply;
+  request: FastifyRequest;
+  windowMs: number;
+}) {
+  const result = rateLimiter.consume(`${keyPrefix}:${request.ip}:${code}`, {
+    limit,
+    windowMs,
+  });
+
+  if (result.allowed) {
+    return false;
+  }
+
+  reply.header("Retry-After", String(result.retryAfterSeconds));
+  reply.code(429).send({
+    error: {
+      ...rateLimitedError,
+      retryAfterSeconds: result.retryAfterSeconds,
+    },
+  });
+  return true;
+}
+
+function sendInvalidPinOrLink(reply: FastifyReply) {
+  return reply.code(401).send({
+    error: invalidPinOrLinkError,
+  });
 }
