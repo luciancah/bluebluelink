@@ -26,7 +26,10 @@ import {
   type PublicTrackingEvent,
 } from "./routes/publicTracking";
 import { registerNaverMapsRoutes } from "./routes/naverMaps";
-import { emptyUserRepository, type UserRepository } from "./users/userRepository";
+import {
+  buildDefaultUserRepository,
+  type UserRepository,
+} from "./users/userRepository";
 
 export type ServerDependencies = {
   users?: UserRepository;
@@ -94,7 +97,7 @@ export function buildServer(
   server.register(registerHealthRoutes);
   server.register(registerAuthRoutes, {
     config: resolvedConfig,
-    users: dependencies.users ?? emptyUserRepository,
+    users: dependencies.users ?? buildDefaultUserRepository(resolvedConfig.NODE_ENV),
     sessions,
     shareSessionAccess,
   });

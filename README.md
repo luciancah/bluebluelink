@@ -7,7 +7,34 @@ Self-owned rebuild of JinHyeongLink, a Korean real-time vehicle location sharing
 - Local git repository initialized on 2026-05-05.
 - Linear project created: https://linear.app/bluebluelink/project/bluebluelink-87834a653f2b
 - Initial Linear backlog created from the Base44 spec, mobile screenshots, and parallel agent review.
-- GitHub remote is not connected yet.
+- GitHub remote connected: https://github.com/luciancah/bluebluelink.git
+
+## Local Development Account
+
+Development builds include a demo driver account:
+
+- Email: `driver@example.com`
+- Password: `ride-home`
+
+The demo account is only enabled when `NODE_ENV=development`.
+
+## Naver Maps Credentials
+
+`apps/web/.env` needs the browser-safe Maps client ID:
+
+```bash
+VITE_NAVER_MAPS_CLIENT_ID=<Naver Maps Client ID>
+```
+
+`apps/api/.env` needs the server-side REST credentials:
+
+```bash
+NAVER_MAPS_API_KEY_ID=<Naver Maps Client ID>
+NAVER_MAPS_API_KEY=<Naver Maps Client Secret>
+NAVER_MAPS_BASE_URL=https://maps.apigw.ntruss.com
+```
+
+Keep the client secret only in the API environment.
 
 ## Product Direction
 

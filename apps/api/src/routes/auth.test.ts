@@ -91,6 +91,30 @@ describe("auth routes", () => {
     });
   });
 
+  it("provides the demo driver account in development", async () => {
+    const server = buildServer({
+      ...testConfig,
+      NODE_ENV: "development",
+    });
+
+    const login = await server.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: {
+        email: "driver@example.com",
+        password: "ride-home",
+      },
+    });
+
+    expect(login.statusCode).toBe(200);
+    expect(login.json()).toEqual({
+      user: {
+        id: "demo_driver",
+        email: "driver@example.com",
+      },
+    });
+  });
+
   it("rejects invalid credentials", async () => {
     const server = await buildTestServer();
 
