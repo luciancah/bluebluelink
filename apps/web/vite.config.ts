@@ -3,6 +3,14 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      "/api": {
+        changeOrigin: true,
+        target: "http://127.0.0.1:4000",
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
