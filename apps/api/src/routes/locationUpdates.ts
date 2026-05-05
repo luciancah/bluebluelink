@@ -3,6 +3,8 @@ import { z } from "zod";
 import { buildRequireAuth } from "../auth/requireAuth";
 import type { SessionStore } from "../auth/sessionStore";
 import type { ShareSessionRepository } from "../sessions/shareSessionRepository";
+import type { ShareSessionRealtime } from "../sessions/shareSessionRealtime";
+import { toPublicTrackingDto, type PublicTrackingEvent } from "./publicTracking";
 import { toOwnerSessionDto } from "./shareSessions";
 
 const updateLocationSchema = z.object({
@@ -17,6 +19,7 @@ export async function registerLocationUpdateRoutes(
   dependencies: {
     sessions: SessionStore;
     shareSessions: ShareSessionRepository;
+    shareSessionRealtime: ShareSessionRealtime<PublicTrackingEvent>;
   },
 ) {
   const requireAuth = buildRequireAuth(dependencies.sessions);
@@ -54,6 +57,10 @@ export async function registerLocationUpdateRoutes(
           },
         });
       }
+
+      dependencies.shareSessionRealtime.publish(session.sessionCode, {
+        session: toPublicTrackingDto(session),
+      });
 
       return {
         session: toOwnerSessionDto(session),

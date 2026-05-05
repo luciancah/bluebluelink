@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -52,6 +52,8 @@ function renderTrackingPage() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("TrackingPage", () => {
@@ -108,6 +110,111 @@ describe("TrackingPage", () => {
       );
     });
     expect(await screen.findByText("37.389800, 126.952780")).toBeTruthy();
+  });
+
+  it("opens a realtime stream and applies location events", async () => {
+    const EventSourceMock = installEventSourceMock();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ session: trackingSession() }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    renderTrackingPage();
+
+    expect(await screen.findByRole("heading", { name: "퇴근길" })).toBeTruthy();
+    await waitFor(() => {
+      expect(EventSourceMock.instances[0]?.url).toBe(
+        "/api/public/share-sessions/AB12CD34/events",
+      );
+    });
+
+    act(() => {
+      EventSourceMock.instances[0].emit("location", {
+        session: trackingSession({
+          latitude: 37.5,
+          longitude: 127,
+          lastUpdatedLocation: new Date().toISOString(),
+        }),
+      });
+    });
+
+    expect(await screen.findByText("37.500000, 127.000000")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses fallback refresh while the realtime stream reconnects", async () => {
+    const EventSourceMock = installEventSourceMock();
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ session: trackingSession() }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            session: trackingSession({
+              latitude: 37.5,
+              longitude: 127,
+              lastUpdatedLocation: new Date().toISOString(),
+            }),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    renderTrackingPage();
+
+    expect(await screen.findByText("37.389800, 126.952780")).toBeTruthy();
+    act(() => {
+      EventSourceMock.instances[0].emitOpen();
+      EventSourceMock.instances[0].emitError();
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText("37.500000, 127.000000")).toBeTruthy();
+    expect(EventSourceMock.instances[0].close).not.toHaveBeenCalled();
+
+    act(() => {
+      EventSourceMock.instances[0].emitOpen();
+      EventSourceMock.instances[0].emit("location", {
+        session: trackingSession({
+          latitude: 37.6,
+          longitude: 127.1,
+          lastUpdatedLocation: new Date().toISOString(),
+        }),
+      });
+    });
+    expect(await screen.findByText("37.600000, 127.100000")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not open a realtime stream while the PIN gate is locked", async () => {
+    const EventSourceMock = installEventSourceMock();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          pinRequired: true,
+          session: trackingSession({
+            latitude: undefined,
+            longitude: undefined,
+            pinRequired: true,
+          }),
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    renderTrackingPage();
+
+    expect(await screen.findByLabelText("PIN 코드")).toBeTruthy();
+    expect(EventSourceMock.instances).toHaveLength(0);
   });
 
   it("shows an invalid PIN state in Korean", async () => {
@@ -184,3 +291,49 @@ describe("TrackingPage", () => {
     );
   });
 });
+
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+
+  readonly close = vi.fn();
+  readonly listeners = new Map<string, Set<(event: MessageEvent<string>) => void>>();
+  onerror: (() => void) | null = null;
+  onopen: (() => void) | null = null;
+
+  constructor(readonly url: string) {
+    MockEventSource.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add((event) => {
+      if (typeof listener === "function") {
+        listener(event);
+        return;
+      }
+
+      listener.handleEvent(event);
+    });
+    this.listeners.set(type, listeners);
+  }
+
+  emit(type: string, data: unknown) {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ data: JSON.stringify(data) } as MessageEvent<string>);
+    }
+  }
+
+  emitError() {
+    this.onerror?.();
+  }
+
+  emitOpen() {
+    this.onopen?.();
+  }
+}
+
+function installEventSourceMock() {
+  MockEventSource.instances = [];
+  vi.stubGlobal("EventSource", MockEventSource);
+  return MockEventSource;
+}

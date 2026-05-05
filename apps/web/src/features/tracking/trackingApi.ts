@@ -48,3 +48,7 @@ export async function verifyTrackingPin(
 
   return response.json() as Promise<PublicTrackingResponse>;
 }
+
+export function getPublicTrackingStreamUrl(code: string) {
+  return `/api/public/share-sessions/${code}/events`;
+}

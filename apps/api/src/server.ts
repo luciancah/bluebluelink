@@ -13,9 +13,16 @@ import {
   InMemoryShareSessionRepository,
   type ShareSessionRepository,
 } from "./sessions/shareSessionRepository";
+import {
+  InMemoryShareSessionRealtime,
+  type ShareSessionRealtime,
+} from "./sessions/shareSessionRealtime";
 import { registerShareSessionRoutes } from "./routes/shareSessions";
 import { registerLocationUpdateRoutes } from "./routes/locationUpdates";
-import { registerPublicTrackingRoutes } from "./routes/publicTracking";
+import {
+  registerPublicTrackingRoutes,
+  type PublicTrackingEvent,
+} from "./routes/publicTracking";
 import { emptyUserRepository, type UserRepository } from "./users/userRepository";
 
 export type ServerDependencies = {
@@ -23,6 +30,7 @@ export type ServerDependencies = {
   sessions?: SessionStore;
   shareSessions?: ShareSessionRepository;
   shareSessionAccess?: ShareSessionAccessRepository;
+  shareSessionRealtime?: ShareSessionRealtime<PublicTrackingEvent>;
 };
 
 export function buildServer(
@@ -37,6 +45,8 @@ export function buildServer(
     dependencies.shareSessions ?? new InMemoryShareSessionRepository();
   const shareSessionAccess =
     dependencies.shareSessionAccess ?? shareSessions ?? denyAllShareSessionAccess;
+  const shareSessionRealtime =
+    dependencies.shareSessionRealtime ?? new InMemoryShareSessionRealtime<PublicTrackingEvent>();
 
   server.register(cors, {
     origin: config.WEB_ORIGIN,
@@ -61,9 +71,11 @@ export function buildServer(
   server.register(registerLocationUpdateRoutes, {
     sessions,
     shareSessions,
+    shareSessionRealtime,
   });
   server.register(registerPublicTrackingRoutes, {
     shareSessions,
+    shareSessionRealtime,
   });
 
   return server;

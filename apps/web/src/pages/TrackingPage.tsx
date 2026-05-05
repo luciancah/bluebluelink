@@ -1,6 +1,6 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LockKeyhole, MapPin, Radio, ShieldAlert } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import {
@@ -8,23 +8,27 @@ import {
   type PublicTrackingSession,
   verifyTrackingPin,
 } from "../features/tracking/trackingApi";
+import { usePublicTrackingRealtime } from "../features/tracking/usePublicTrackingRealtime";
 
 export function TrackingPage() {
   const { code } = useParams<{ code: string }>();
   const trackingCode = code ?? "";
+  const queryClient = useQueryClient();
+  const trackingQueryKey = useMemo(
+    () => ["public-tracking", trackingCode] as const,
+    [trackingCode],
+  );
   const [pinCode, setPinCode] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
-  const [verifiedSession, setVerifiedSession] = useState<PublicTrackingSession | null>(null);
   const trackingQuery = useQuery({
-    queryKey: ["public-tracking", trackingCode],
+    queryKey: trackingQueryKey,
     queryFn: () => getPublicTrackingSession(trackingCode),
     enabled: trackingCode.length > 0,
-    refetchInterval: (query) => (query.state.data?.pinRequired ? false : 5000),
   });
   const pinMutation = useMutation({
     mutationFn: (input: string) => verifyTrackingPin(trackingCode, input),
     onSuccess: (data) => {
-      setVerifiedSession(data.session);
+      queryClient.setQueryData(trackingQueryKey, data);
       setPinError(null);
     },
     onError: () => {
@@ -32,15 +36,40 @@ export function TrackingPage() {
     },
   });
 
-  const session = verifiedSession ?? trackingQuery.data?.session;
+  const session = trackingQuery.data?.session;
   const coordinates =
     typeof session?.latitude === "number" && typeof session.longitude === "number"
       ? formatCoordinates(session.latitude, session.longitude)
       : null;
   const hasLocation = coordinates !== null;
-  const isPinRequired =
-    !verifiedSession && Boolean(trackingQuery.data?.pinRequired || session?.pinRequired);
+  const isPinRequired = Boolean(trackingQuery.data?.pinRequired || session?.pinRequired);
+  const realtimeStatus = usePublicTrackingRealtime({
+    code: trackingCode,
+    enabled:
+      trackingCode.length > 0 &&
+      trackingQuery.isSuccess &&
+      !isPinRequired &&
+      !trackingQuery.isError,
+    queryKey: trackingQueryKey,
+  });
   const statusCopy = getTrackingStatusCopy(session, Date.now());
+  const refetchTracking = trackingQuery.refetch;
+
+  useEffect(() => {
+    if (
+      trackingCode.length === 0 ||
+      isPinRequired ||
+      (realtimeStatus !== "unsupported" && realtimeStatus !== "fallback")
+    ) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void refetchTracking();
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [isPinRequired, realtimeStatus, refetchTracking, trackingCode]);
 
   function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
