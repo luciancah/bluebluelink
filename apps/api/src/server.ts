@@ -9,11 +9,17 @@ import {
   denyAllShareSessionAccess,
   type ShareSessionAccessRepository,
 } from "./sessions/shareSessionAccess";
+import {
+  InMemoryShareSessionRepository,
+  type ShareSessionRepository,
+} from "./sessions/shareSessionRepository";
+import { registerShareSessionRoutes } from "./routes/shareSessions";
 import { emptyUserRepository, type UserRepository } from "./users/userRepository";
 
 export type ServerDependencies = {
   users?: UserRepository;
   sessions?: SessionStore;
+  shareSessions?: ShareSessionRepository;
   shareSessionAccess?: ShareSessionAccessRepository;
 };
 
@@ -25,6 +31,10 @@ export function buildServer(
     logger: config.NODE_ENV !== "test",
   });
   const sessions = dependencies.sessions ?? new InMemorySessionStore();
+  const shareSessions =
+    dependencies.shareSessions ?? new InMemoryShareSessionRepository();
+  const shareSessionAccess =
+    dependencies.shareSessionAccess ?? shareSessions ?? denyAllShareSessionAccess;
 
   server.register(cors, {
     origin: config.WEB_ORIGIN,
@@ -40,7 +50,11 @@ export function buildServer(
     config,
     users: dependencies.users ?? emptyUserRepository,
     sessions,
-    shareSessionAccess: dependencies.shareSessionAccess ?? denyAllShareSessionAccess,
+    shareSessionAccess,
+  });
+  server.register(registerShareSessionRoutes, {
+    sessions,
+    shareSessions,
   });
 
   return server;
