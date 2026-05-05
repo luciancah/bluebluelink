@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ShareSessionStatus {
+  active
+  expired
+  stopped
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions     ShareSession[]
+
+  @@map("users")
+}
+
+model ShareSession {
+  id                  String             @id @default(cuid())
+  ownerId             String             @map("owner_id")
+  sessionCode         String             @unique @map("session_code")
+  sessionName         String             @map("session_name")
+  status              ShareSessionStatus @default(active)
+  expiresAt           DateTime           @map("expires_at") @db.Timestamptz(3)
+  lastUpdatedLocation DateTime?          @map("last_updated_location") @db.Timestamptz(3)
+  latitude            Float?
+  longitude           Float?
+  accuracyMeters      Float?             @map("accuracy_meters")
+  pinCodeHash         String?            @map("pin_code_hash")
+  destinationName     String?            @map("destination_name")
+  destinationLat      Float?             @map("destination_lat")
+  destinationLng      Float?             @map("destination_lng")
+  stoppedAt           DateTime?          @map("stopped_at") @db.Timestamptz(3)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  owner               User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, status])
+  @@index([status, expiresAt])
+  @@map("share_sessions")
+}
