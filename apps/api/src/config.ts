@@ -7,6 +7,9 @@ const configSchema = z.object({
   WEB_ORIGIN: z.string().url().default("http://localhost:5173"),
   COOKIE_SECRET: z.string().min(16).default("dev-cookie-secret-change-me"),
   DATABASE_URL: z.string().min(1).default("postgresql://bluebluelink:bluebluelink@localhost:5432/bluebluelink"),
+  NAVER_MAPS_API_KEY: z.string().default(""),
+  NAVER_MAPS_API_KEY_ID: z.string().default(""),
+  NAVER_MAPS_BASE_URL: z.string().url().default("https://naveropenapi.apigw.ntruss.com"),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

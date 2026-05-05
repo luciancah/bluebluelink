@@ -5,6 +5,7 @@ import { InMemorySessionStore, type SessionStore } from "./auth/sessionStore";
 import { loadConfig, type AppConfig } from "./config";
 import { registerHealthRoutes } from "./routes/health";
 import { registerAuthRoutes } from "./routes/auth";
+import { NaverMapsClient, type NaverMapsProxy } from "./naver/naverMapsClient";
 import { InMemoryRateLimiter, type RateLimiter } from "./security/rateLimiter";
 import {
   denyAllShareSessionAccess,
@@ -24,6 +25,7 @@ import {
   registerPublicTrackingRoutes,
   type PublicTrackingEvent,
 } from "./routes/publicTracking";
+import { registerNaverMapsRoutes } from "./routes/naverMaps";
 import { emptyUserRepository, type UserRepository } from "./users/userRepository";
 
 export type ServerDependencies = {
@@ -33,14 +35,20 @@ export type ServerDependencies = {
   shareSessionAccess?: ShareSessionAccessRepository;
   shareSessionRealtime?: ShareSessionRealtime<PublicTrackingEvent>;
   publicRateLimiter?: RateLimiter;
+  naverMaps?: NaverMapsProxy;
+  naverRateLimiter?: RateLimiter;
 };
 
 export function buildServer(
-  config: AppConfig = loadConfig(),
+  config: Partial<AppConfig> = loadConfig(),
   dependencies: ServerDependencies = {},
 ) {
+  const resolvedConfig = {
+    ...loadConfig({}),
+    ...config,
+  };
   const server = Fastify({
-    logger: buildLoggerOptions(config.NODE_ENV),
+    logger: buildLoggerOptions(resolvedConfig.NODE_ENV),
     trustProxy: true,
   });
   const sessions = dependencies.sessions ?? new InMemorySessionStore();
@@ -52,9 +60,17 @@ export function buildServer(
     dependencies.shareSessionRealtime ?? new InMemoryShareSessionRealtime<PublicTrackingEvent>();
   const publicRateLimiter =
     dependencies.publicRateLimiter ?? new InMemoryRateLimiter();
+  const naverMaps =
+    dependencies.naverMaps ??
+    new NaverMapsClient({
+      apiKey: resolvedConfig.NAVER_MAPS_API_KEY,
+      apiKeyId: resolvedConfig.NAVER_MAPS_API_KEY_ID,
+      baseUrl: resolvedConfig.NAVER_MAPS_BASE_URL,
+    });
+  const naverRateLimiter = dependencies.naverRateLimiter ?? new InMemoryRateLimiter();
 
   server.addHook("onRequest", async (request, reply) => {
-    if (config.NODE_ENV !== "production" || isHttpsRequest(request)) {
+    if (resolvedConfig.NODE_ENV !== "production" || isHttpsRequest(request)) {
       return;
     }
 
@@ -67,17 +83,17 @@ export function buildServer(
   });
 
   server.register(cors, {
-    origin: config.WEB_ORIGIN,
+    origin: resolvedConfig.WEB_ORIGIN,
     credentials: true,
   });
 
   server.register(cookie, {
-    secret: config.COOKIE_SECRET,
+    secret: resolvedConfig.COOKIE_SECRET,
   });
 
   server.register(registerHealthRoutes);
   server.register(registerAuthRoutes, {
-    config,
+    config: resolvedConfig,
     users: dependencies.users ?? emptyUserRepository,
     sessions,
     shareSessionAccess,
@@ -95,6 +111,10 @@ export function buildServer(
     shareSessions,
     shareSessionRealtime,
     publicRateLimiter,
+  });
+  server.register(registerNaverMapsRoutes, {
+    naverMaps,
+    rateLimiter: naverRateLimiter,
   });
 
   return server;
