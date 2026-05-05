@@ -6,10 +6,41 @@ import { useLocationBroadcast } from "./useLocationBroadcast";
 type PositionSuccess = PositionCallback;
 type PositionError = PositionErrorCallback;
 
+function createPosition({
+  latitude = 37.3898,
+  longitude = 126.95278,
+  accuracy = 18,
+  timestamp = Date.parse("2026-05-05T10:00:00.000Z"),
+}: {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  timestamp?: number;
+} = {}): GeolocationPosition {
+  return {
+    coords: {
+      latitude,
+      longitude,
+      accuracy,
+    } as GeolocationCoordinates,
+    timestamp,
+    toJSON() {
+      return this;
+    },
+  };
+}
+
 function mockSecureContext(value: boolean) {
   Object.defineProperty(window, "isSecureContext", {
     configurable: true,
     value,
+  });
+}
+
+function mockOnline(value: boolean) {
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    get: () => value,
   });
 }
 
@@ -45,6 +76,7 @@ function mockGeolocation({
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -141,6 +173,196 @@ describe("useLocationBroadcast", () => {
     });
 
     expect(result.current.status).toBe("denied");
+  });
+
+  it("resends the latest GPS point while the app remains active", async () => {
+    vi.useFakeTimers();
+    mockSecureContext(true);
+    mockOnline(true);
+    mockGeolocation({
+      success: {
+        coords: {
+          latitude: 37.3898,
+          longitude: 126.95278,
+          accuracy: 18,
+        } as GeolocationCoordinates,
+        timestamp: Date.parse("2026-05-05T10:00:00.000Z"),
+        toJSON() {
+          return this;
+        },
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ session: { id: "session_1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const { result } = renderHook(() => useLocationBroadcast("session_1"));
+
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.status).toBe("sent");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("throttles noisy GPS callbacks to the foreground resend cadence", async () => {
+    vi.useFakeTimers();
+    mockSecureContext(true);
+    mockOnline(true);
+    let sendGpsUpdate: PositionSuccess | undefined;
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        watchPosition: vi.fn((onSuccess: PositionSuccess) => {
+          sendGpsUpdate = onSuccess;
+          return 7;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ session: { id: "session_1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const { result } = renderHook(() => useLocationBroadcast("session_1"));
+
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      sendGpsUpdate?.(createPosition({ latitude: 37.3898 }));
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      sendGpsUpdate?.(createPosition({ latitude: 37.4901 }));
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/share-sessions/session_1/location",
+      expect.objectContaining({
+        body: expect.stringContaining("\"latitude\":37.4901"),
+      }),
+    );
+  });
+
+  it("retries the latest GPS point when the app comes back online", async () => {
+    let isOnline = false;
+    mockSecureContext(true);
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      get: () => isOnline,
+    });
+    mockGeolocation({
+      success: {
+        coords: {
+          latitude: 37.3898,
+          longitude: 126.95278,
+          accuracy: 18,
+        } as GeolocationCoordinates,
+        timestamp: Date.parse("2026-05-05T10:00:00.000Z"),
+        toJSON() {
+          return this;
+        },
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ session: { id: "session_1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const { result } = renderHook(() => useLocationBroadcast("session_1"));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(result.current.status).toBe("delayed");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    isOnline = true;
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("sent");
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks backgrounded broadcasts and refreshes when visible again", async () => {
+    let visibilityState: DocumentVisibilityState = "visible";
+    mockSecureContext(true);
+    mockOnline(true);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => visibilityState,
+    });
+    mockGeolocation({
+      success: {
+        coords: {
+          latitude: 37.3898,
+          longitude: 126.95278,
+          accuracy: 18,
+        } as GeolocationCoordinates,
+        timestamp: Date.parse("2026-05-05T10:00:00.000Z"),
+        toJSON() {
+          return this;
+        },
+      },
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ session: { id: "session_1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const { result } = renderHook(() => useLocationBroadcast("session_1"));
+
+    await act(async () => {
+      await result.current.start();
+    });
+    await waitFor(() => {
+      expect(result.current.status).toBe("sent");
+    });
+
+    visibilityState = "hidden";
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(result.current.status).toBe("background");
+
+    visibilityState = "visible";
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("sent");
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

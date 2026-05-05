@@ -22,12 +22,18 @@ export function BroadcastPage() {
         <Radio className="status-icon" size={28} aria-label="공유 중" />
       </header>
 
-      <SharedMap isStale={broadcast.status === "delayed"} />
+      <SharedMap isStale={broadcast.status === "delayed" || broadcast.status === "background"} />
 
-      <footer className="bottom-panel">
-        <div>
-          <p>공유 ID: {id}</p>
-          <p className="muted">{statusCopy.label}</p>
+      <footer className="bottom-panel broadcast-panel">
+        <div className="broadcast-panel__summary">
+          <div>
+            <p>공유 ID: {id}</p>
+            <p className="muted">{statusCopy.label}</p>
+          </div>
+          <div className="broadcast-contract" role="note">
+            <p>앱을 열어두는 동안만 위치가 전송됩니다.</p>
+            <p>화면을 잠그거나 앱을 닫으면 업데이트가 멈출 수 있습니다.</p>
+          </div>
         </div>
         <div className="broadcast-actions">
           <Button
@@ -74,6 +80,11 @@ function getBroadcastStatusCopy(status: BroadcastStatus) {
       return {
         label: "업데이트 지연",
         description: "네트워크 문제로 위치 전송이 늦어지고 있습니다.",
+      };
+    case "background":
+      return {
+        label: "앱이 백그라운드에 있습니다",
+        description: "앱이 다시 열리면 최신 위치를 다시 전송합니다.",
       };
     case "denied":
       return {

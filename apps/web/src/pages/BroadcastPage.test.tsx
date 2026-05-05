@@ -67,4 +67,11 @@ describe("BroadcastPage", () => {
       expect(screen.getByText("방금 전송됨")).toBeTruthy();
     });
   });
+
+  it("makes the foreground-only GPS contract visible", () => {
+    renderBroadcastPage();
+
+    expect(screen.getByText("앱을 열어두는 동안만 위치가 전송됩니다.")).toBeTruthy();
+    expect(screen.getByText("화면을 잠그거나 앱을 닫으면 업데이트가 멈출 수 있습니다.")).toBeTruthy();
+  });
 });

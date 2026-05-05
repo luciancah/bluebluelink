@@ -537,6 +537,29 @@ button {
   margin: 0;
 }
 
+.broadcast-panel {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.broadcast-panel__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.broadcast-contract {
+  max-width: 290px;
+  border-left: 3px solid #2563eb;
+  padding-left: 12px;
+  color: #64748b;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: right;
+}
+
 .tracking-status {
   display: grid;
   gap: 4px;
@@ -573,6 +596,15 @@ button {
   .bottom-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .broadcast-panel__summary {
+    flex-direction: column;
+  }
+
+  .broadcast-contract {
+    max-width: none;
+    text-align: left;
   }
 
   .broadcast-actions {
