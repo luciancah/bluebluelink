@@ -46,6 +46,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function mockClipboard() {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText,
+    },
+  });
+
+  return writeText;
+}
+
 describe("DashboardPage", () => {
   it("separates active and past location shares", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
@@ -111,6 +123,86 @@ describe("DashboardPage", () => {
         }),
       );
     });
+  });
+
+  it("shows a share handoff with native share, SMS, and copy after creating a location share", async () => {
+    const shareMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: shareMock,
+    });
+    const writeText = mockClipboard();
+    const created = session({
+      sessionName: "강남 픽업",
+      sessionCode: "KANGNAM1",
+      destinationName: "강남역",
+      expiresAt: "2026-05-05T11:00:00.000Z",
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessions: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ session: created }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessions: [created] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    renderDashboard();
+
+    await userEvent.type(await screen.findByLabelText("공유 이름"), "강남 픽업");
+    await userEvent.click(screen.getByRole("button", { name: "공유 시작" }));
+
+    expect(await screen.findByText("친구에게 보낼 메시지")).toBeTruthy();
+    expect(screen.getAllByText(/강남 픽업/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/목적지: 강남역/)).toBeTruthy();
+    expect(screen.getByText(/도착 전까지 실시간 위치를 확인해 주세요./)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "문자로 보내기" }).getAttribute("href")).toContain(
+      "sms:?&body=",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "카카오톡 또는 공유 앱 열기" }));
+    expect(shareMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "진형링크 위치 공유",
+        url: expect.stringContaining("/track/KANGNAM1"),
+        text: expect.stringContaining("강남 픽업"),
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "링크 복사" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/track/KANGNAM1"));
+    expect(await screen.findByText("링크를 복사했어요.")).toBeTruthy();
+  });
+
+  it("keeps PIN and share controls mobile-accessible", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ sessions: [session()] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    renderDashboard();
+
+    const pinInput = await screen.findByLabelText("PIN 코드 (선택)");
+    expect(pinInput.getAttribute("inputmode")).toBe("numeric");
+    expect(pinInput.getAttribute("pattern")).toBe("[0-9]*");
+    expect(pinInput.getAttribute("autocomplete")).toBe("one-time-code");
+    expect(await screen.findByRole("button", { name: "링크 복사" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "문자로 보내기" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "카카오톡 또는 공유 앱 열기" })).toBeTruthy();
   });
 
   it("searches a Korean destination and includes it when creating a location share", async () => {

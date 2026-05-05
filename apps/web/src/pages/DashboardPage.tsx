@@ -1,8 +1,23 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Clock, Copy, MapPin, Plus, Radio, Search, Square, Trash2 } from "lucide-react";
+import {
+  Clock,
+  Copy,
+  MapPin,
+  MessageCircle,
+  Plus,
+  Radio,
+  Search,
+  Share2,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
 import { searchNaverPlaces, type NaverPlace } from "../features/naver/naverApi";
+import {
+  buildShareHandoff,
+  formatShareTimeRemaining,
+} from "../features/shareSessions/shareHandoff";
 import {
   createShareSession,
   deleteShareSession,
@@ -183,9 +198,11 @@ export function DashboardPage() {
           <label>
             PIN 코드 (선택)
             <input
+              autoComplete="one-time-code"
               inputMode="numeric"
               maxLength={4}
               onChange={(event) => setPinCode(event.target.value.replace(/\D/g, ""))}
+              pattern="[0-9]*"
               placeholder="1234"
               type="text"
               value={pinCode}
@@ -251,18 +268,25 @@ function SessionGroup({
         <div className="session-list">
           {sessions.map((session) => (
             <article className="session-card" key={session.id}>
-              <div>
+              <div className="session-card__main">
                 <h3>{session.sessionName}</h3>
                 <p className="muted">
                   <Clock size={16} aria-hidden="true" />
                   {formatSessionStatus(session)}
                 </p>
+                {session.destinationName ? (
+                  <p className="session-card__destination">
+                    <MapPin size={16} aria-hidden="true" />
+                    {session.destinationName}
+                  </p>
+                ) : null}
                 <p className="session-code">
                   <Copy size={16} aria-hidden="true" />
                   {session.sessionCode}
                   {session.hasPin ? <span>PIN 보호됨</span> : null}
                 </p>
               </div>
+              {session.status === "active" ? <ShareHandoffPanel session={session} /> : null}
               <div className="session-actions">
                 {onStop && session.status === "active" ? (
                   <Button
@@ -287,6 +311,82 @@ function SessionGroup({
   );
 }
 
+function ShareHandoffPanel({ session }: { session: OwnerShareSession }) {
+  const [feedback, setFeedback] = useState("");
+  const handoff = buildShareHandoff({
+    session,
+    origin: window.location.origin,
+  });
+
+  async function copyToClipboard(value: string, successMessage: string) {
+    if (!navigator.clipboard?.writeText) {
+      setFeedback("이 브라우저에서는 직접 복사할 수 없습니다.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setFeedback(successMessage);
+    } catch {
+      setFeedback("복사하지 못했습니다. 링크를 길게 눌러 복사해 주세요.");
+    }
+  }
+
+  async function handleNativeShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: handoff.title,
+          text: handoff.message,
+          url: handoff.trackingUrl,
+        });
+        setFeedback("공유 앱을 열었어요.");
+        return;
+      } catch {
+        setFeedback("공유를 취소했거나 열지 못했습니다.");
+        return;
+      }
+    }
+
+    await copyToClipboard(handoff.message, "메시지를 복사했어요. 카카오톡에 붙여넣어 주세요.");
+  }
+
+  return (
+    <div className="share-handoff" aria-label={`${session.sessionName} 공유 보내기`}>
+      <div className="share-handoff__preview">
+        <p className="eyebrow">친구에게 보낼 메시지</p>
+        <pre>{handoff.message}</pre>
+      </div>
+      <div className="share-handoff__actions">
+        <Button type="button" variant="secondary" onClick={() => void handleNativeShare()}>
+          <Share2 size={16} aria-hidden="true" />
+          카카오톡 또는 공유 앱 열기
+        </Button>
+        <Button asChild variant="secondary">
+          <a href={handoff.smsHref}>
+            <MessageCircle size={16} aria-hidden="true" />
+            문자로 보내기
+          </a>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => void copyToClipboard(handoff.trackingUrl, "링크를 복사했어요.")}
+        >
+          <Copy size={16} aria-hidden="true" />
+          링크 복사
+        </Button>
+      </div>
+      <p className="share-handoff__hint">
+        휴대폰 공유 시트에서 카카오톡을 선택할 수 있어요.
+      </p>
+      <p className="share-handoff__feedback" aria-live="polite">
+        {feedback}
+      </p>
+    </div>
+  );
+}
+
 function formatSessionStatus(session: OwnerShareSession) {
   if (session.status === "stopped") {
     return "공유 중지됨";
@@ -296,5 +396,5 @@ function formatSessionStatus(session: OwnerShareSession) {
     return "만료됨";
   }
 
-  return "공유 중";
+  return `공유 중 · 약 ${formatShareTimeRemaining(session.expiresAt)} 남음`;
 }
