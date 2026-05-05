@@ -29,6 +29,21 @@ type NaverGeocodeAddress = {
   y?: unknown;
 };
 
+type NaverLocalSearchItem = {
+  address?: unknown;
+  mapx?: unknown;
+  mapy?: unknown;
+  roadAddress?: unknown;
+  title?: unknown;
+};
+
+export type NaverLocalSearchAddressCandidate = {
+  address: string;
+  jibunAddress: string | null;
+  name: string;
+  roadAddress: string | null;
+};
+
 type NaverReverseGeocodeResult = {
   land?: {
     addition0?: {
@@ -56,6 +71,46 @@ export function normalizeNaverGeocodeResponse(raw: unknown) {
     : [];
 
   return { places };
+}
+
+export function normalizeNaverLocalSearchResponse(raw: unknown) {
+  const items = getRecord(raw).items;
+  const places = Array.isArray(items)
+    ? items.flatMap((item) => normalizeNaverLocalSearchPlace(item))
+    : [];
+
+  return { places };
+}
+
+export function normalizeNaverLocalSearchAddressCandidates(
+  raw: unknown,
+): NaverLocalSearchAddressCandidate[] {
+  const items = getRecord(raw).items;
+
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.flatMap((item) => {
+    const record = getRecord(item) as NaverLocalSearchItem;
+    const roadAddress = toStringOrNull(record.roadAddress);
+    const jibunAddress = toStringOrNull(record.address);
+    const displayAddress = roadAddress ?? jibunAddress;
+    const name = stripHtmlTags(toStringOrNull(record.title) ?? displayAddress ?? "");
+
+    if (!displayAddress || !name) {
+      return [];
+    }
+
+    return [
+      {
+        address: displayAddress,
+        jibunAddress,
+        name,
+        roadAddress,
+      },
+    ];
+  });
 }
 
 export function normalizeNaverReverseGeocodeResponse(raw: unknown): NormalizedNaverAddress {
@@ -145,6 +200,52 @@ function normalizeNaverPlace(address: unknown): NormalizedNaverPlace[] {
   ];
 }
 
+function normalizeNaverLocalSearchPlace(item: unknown): NormalizedNaverPlace[] {
+  const record = getRecord(item) as NaverLocalSearchItem;
+  const coordinate = normalizeLocalSearchCoordinate(record.mapx, record.mapy);
+  const roadAddress = toStringOrNull(record.roadAddress);
+  const jibunAddress = toStringOrNull(record.address);
+  const displayAddress = roadAddress ?? jibunAddress;
+  const name = stripHtmlTags(toStringOrNull(record.title) ?? displayAddress ?? "");
+
+  if (!coordinate || !displayAddress || !name) {
+    return [];
+  }
+
+  return [
+    {
+      address: displayAddress,
+      jibunAddress,
+      lat: coordinate.lat,
+      lng: coordinate.lng,
+      name,
+      roadAddress,
+    },
+  ];
+}
+
+function normalizeLocalSearchCoordinate(mapx: unknown, mapy: unknown) {
+  const rawLng = toNumberOrNull(mapx);
+  const rawLat = toNumberOrNull(mapy);
+
+  if (rawLng === null || rawLat === null) {
+    return null;
+  }
+
+  const candidates = [
+    {
+      lat: rawLat,
+      lng: rawLng,
+    },
+    {
+      lat: rawLat / 10_000_000,
+      lng: rawLng / 10_000_000,
+    },
+  ];
+
+  return candidates.find((candidate) => isKoreanCoordinate(candidate)) ?? null;
+}
+
 function normalizeNaverPath(path: unknown) {
   if (!Array.isArray(path)) {
     return [];
@@ -170,6 +271,10 @@ function getRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+function isKoreanCoordinate(coordinate: { lat: number; lng: number }) {
+  return coordinate.lat >= 33 && coordinate.lat <= 39 && coordinate.lng >= 124 && coordinate.lng <= 132;
+}
+
 function toNumberOrNull(value: unknown) {
   if (typeof value !== "number" && typeof value !== "string") {
     return null;
@@ -186,4 +291,8 @@ function toNumberOrNull(value: unknown) {
 
 function toStringOrNull(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function stripHtmlTags(value: string) {
+  return value.replace(/<[^>]*>/g, "").trim();
 }

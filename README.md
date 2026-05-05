@@ -34,6 +34,15 @@ NAVER_MAPS_API_KEY=<Naver Maps Client Secret>
 NAVER_MAPS_BASE_URL=https://maps.apigw.ntruss.com
 ```
 
+Place-style destination search, such as `강남역`, uses Naver Developers Local
+Search credentials, not the Naver Cloud Maps key:
+
+```bash
+NAVER_LOCAL_SEARCH_CLIENT_ID=<Naver Developers Search Client ID>
+NAVER_LOCAL_SEARCH_CLIENT_SECRET=<Naver Developers Search Client Secret>
+NAVER_LOCAL_SEARCH_BASE_URL=https://openapi.naver.com
+```
+
 Keep the client secret only in the API environment.
 
 ## Product Direction

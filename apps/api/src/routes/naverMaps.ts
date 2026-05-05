@@ -5,10 +5,14 @@ import {
   type NaverMapsProxy,
 } from "../naver/naverMapsClient";
 import {
+  normalizeNaverLocalSearchAddressCandidates,
+  normalizeNaverLocalSearchResponse,
   normalizeNaverDirectionsResponse,
   normalizeNaverGeocodeResponse,
   normalizeNaverReverseGeocodeResponse,
+  type NormalizedNaverPlace,
 } from "../naver/naverMapsNormalizer";
+import type { NaverPlaceSearchProxy } from "../naver/naverPlaceSearchClient";
 import type { RateLimiter } from "../security/rateLimiter";
 
 const NAVER_PROXY_WINDOW_MS = 60 * 1000;
@@ -40,6 +44,7 @@ export async function registerNaverMapsRoutes(
   server: FastifyInstance,
   dependencies: {
     naverMaps: NaverMapsProxy;
+    naverPlaceSearch: NaverPlaceSearchProxy;
     rateLimiter: RateLimiter;
   },
 ) {
@@ -54,9 +59,17 @@ export async function registerNaverMapsRoutes(
       return sendInvalidNaverRequest(reply);
     }
 
-    return proxyNaver(reply, async () =>
-      normalizeNaverGeocodeResponse(await dependencies.naverMaps.geocode(parsed.data)),
-    );
+    return proxyNaver(reply, async () => {
+      const searchedPlaces = await trySearchPlaces(parsed.data, dependencies);
+
+      if (searchedPlaces.places.length > 0) {
+        return searchedPlaces;
+      }
+
+      return normalizeNaverGeocodeResponse(
+        await dependencies.naverMaps.geocode(parsed.data),
+      );
+    });
   });
 
   server.get("/api/naver/reverse-geocode", async (request, reply) => {
@@ -95,6 +108,69 @@ export async function registerNaverMapsRoutes(
       ),
     );
   });
+}
+
+async function trySearchPlaces(
+  input: { count: number; query: string },
+  dependencies: {
+    naverMaps: NaverMapsProxy;
+    naverPlaceSearch: NaverPlaceSearchProxy;
+  },
+): Promise<{ places: NormalizedNaverPlace[] }> {
+  if (!dependencies.naverPlaceSearch.isConfigured()) {
+    return { places: [] };
+  }
+
+  try {
+    const rawSearch = await dependencies.naverPlaceSearch.search(input);
+    const localSearch = normalizeNaverLocalSearchResponse(rawSearch);
+
+    if (localSearch.places.length > 0) {
+      return localSearch;
+    }
+
+    return {
+      places: await geocodeLocalSearchAddressCandidates(rawSearch, input, dependencies),
+    };
+  } catch {
+    return { places: [] };
+  }
+}
+
+async function geocodeLocalSearchAddressCandidates(
+  rawSearch: unknown,
+  input: { count: number },
+  dependencies: {
+    naverMaps: NaverMapsProxy;
+  },
+) {
+  const places: NormalizedNaverPlace[] = [];
+  const candidates = normalizeNaverLocalSearchAddressCandidates(rawSearch).slice(
+    0,
+    input.count,
+  );
+
+  for (const candidate of candidates) {
+    const geocoded = normalizeNaverGeocodeResponse(
+      await dependencies.naverMaps.geocode({
+        count: 1,
+        query: candidate.roadAddress ?? candidate.address,
+      }),
+    );
+    const place = geocoded.places[0];
+
+    if (place) {
+      places.push({
+        ...place,
+        address: place.address || candidate.address,
+        jibunAddress: place.jibunAddress ?? candidate.jibunAddress,
+        name: candidate.name,
+        roadAddress: place.roadAddress ?? candidate.roadAddress,
+      });
+    }
+  }
+
+  return places;
 }
 
 function rejectUnavailableOrLimited(

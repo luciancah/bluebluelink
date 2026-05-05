@@ -6,6 +6,10 @@ import { loadConfig, type AppConfig } from "./config";
 import { registerHealthRoutes } from "./routes/health";
 import { registerAuthRoutes } from "./routes/auth";
 import { NaverMapsClient, type NaverMapsProxy } from "./naver/naverMapsClient";
+import {
+  NaverPlaceSearchClient,
+  type NaverPlaceSearchProxy,
+} from "./naver/naverPlaceSearchClient";
 import { InMemoryRateLimiter, type RateLimiter } from "./security/rateLimiter";
 import {
   denyAllShareSessionAccess,
@@ -39,6 +43,7 @@ export type ServerDependencies = {
   shareSessionRealtime?: ShareSessionRealtime<PublicTrackingEvent>;
   publicRateLimiter?: RateLimiter;
   naverMaps?: NaverMapsProxy;
+  naverPlaceSearch?: NaverPlaceSearchProxy;
   naverRateLimiter?: RateLimiter;
 };
 
@@ -69,6 +74,13 @@ export function buildServer(
       apiKey: resolvedConfig.NAVER_MAPS_API_KEY,
       apiKeyId: resolvedConfig.NAVER_MAPS_API_KEY_ID,
       baseUrl: resolvedConfig.NAVER_MAPS_BASE_URL,
+    });
+  const naverPlaceSearch =
+    dependencies.naverPlaceSearch ??
+    new NaverPlaceSearchClient({
+      baseUrl: resolvedConfig.NAVER_LOCAL_SEARCH_BASE_URL,
+      clientId: resolvedConfig.NAVER_LOCAL_SEARCH_CLIENT_ID,
+      clientSecret: resolvedConfig.NAVER_LOCAL_SEARCH_CLIENT_SECRET,
     });
   const naverRateLimiter = dependencies.naverRateLimiter ?? new InMemoryRateLimiter();
 
@@ -117,6 +129,7 @@ export function buildServer(
   });
   server.register(registerNaverMapsRoutes, {
     naverMaps,
+    naverPlaceSearch,
     rateLimiter: naverRateLimiter,
   });
 

@@ -10,6 +10,9 @@ const configSchema = z.object({
   NAVER_MAPS_API_KEY: z.string().default(""),
   NAVER_MAPS_API_KEY_ID: z.string().default(""),
   NAVER_MAPS_BASE_URL: z.string().url().default("https://maps.apigw.ntruss.com"),
+  NAVER_LOCAL_SEARCH_CLIENT_ID: z.string().default(""),
+  NAVER_LOCAL_SEARCH_CLIENT_SECRET: z.string().default(""),
+  NAVER_LOCAL_SEARCH_BASE_URL: z.string().url().default("https://openapi.naver.com"),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

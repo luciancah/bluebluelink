@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildServer } from "../server";
 import { NAVER_PROXY_RATE_LIMIT, type NaverMapsProxy } from "../naver/naverMapsClient";
+import type { NaverPlaceSearchProxy } from "../naver/naverPlaceSearchClient";
 
 const testConfig = {
   NODE_ENV: "test" as const,
@@ -80,6 +81,172 @@ function createProxy(configured = true) {
 }
 
 describe("Naver Maps proxy routes", () => {
+  it("prefers Naver Local Search for place-like destination queries", async () => {
+    const calls: Array<{ operation: string; input: unknown }> = [];
+    const naverMaps: NaverMapsProxy = {
+      isConfigured: () => true,
+      geocode: async (input) => {
+        calls.push({ operation: "geocode", input });
+        return { addresses: [] };
+      },
+      reverseGeocode: async () => ({ results: [] }),
+      directions: async () => ({ route: {} }),
+    };
+    const naverPlaceSearch: NaverPlaceSearchProxy = {
+      isConfigured: () => true,
+      search: async (input) => {
+        calls.push({ operation: "localSearch", input });
+        return {
+          items: [
+            {
+              title: "<b>강남역</b>",
+              category: "교통,수송>지하철,전철",
+              address: "서울특별시 강남구 역삼동 858",
+              roadAddress: "서울특별시 강남구 강남대로 396",
+              mapx: "1270283079",
+              mapy: "374981647",
+            },
+          ],
+        };
+      },
+    };
+    const server = buildServer(testConfig, { naverMaps, naverPlaceSearch });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/naver/geocode?query=%EA%B0%95%EB%82%A8%EC%97%AD&count=5",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      places: [
+        {
+          address: "서울특별시 강남구 강남대로 396",
+          jibunAddress: "서울특별시 강남구 역삼동 858",
+          lat: 37.4981647,
+          lng: 127.0283079,
+          name: "강남역",
+          roadAddress: "서울특별시 강남구 강남대로 396",
+        },
+      ],
+    });
+    expect(calls).toEqual([
+      {
+        operation: "localSearch",
+        input: {
+          count: 5,
+          query: "강남역",
+        },
+      },
+    ]);
+  });
+
+  it("uses address geocoding when local search is not configured", async () => {
+    const { calls, proxy } = createProxy();
+    const naverPlaceSearch: NaverPlaceSearchProxy = {
+      isConfigured: () => false,
+      search: async () => {
+        throw new Error("should not call local search");
+      },
+    };
+    const server = buildServer(testConfig, {
+      naverMaps: proxy,
+      naverPlaceSearch,
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/naver/geocode?query=%EA%B0%95%EB%82%A8%EB%8C%80%EB%A1%9C%20396&count=3",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().places).toHaveLength(1);
+    expect(calls).toEqual([
+      {
+        operation: "geocode",
+        input: {
+          count: 3,
+          query: "강남대로 396",
+        },
+      },
+    ]);
+  });
+
+  it("geocodes local search result addresses when local coordinates are not WGS84", async () => {
+    const calls: Array<{ operation: string; input: unknown }> = [];
+    const naverMaps: NaverMapsProxy = {
+      isConfigured: () => true,
+      geocode: async (input) => {
+        calls.push({ operation: "geocode", input });
+        return {
+          addresses: [
+            {
+              roadAddress: "서울특별시 강남구 강남대로 396",
+              jibunAddress: "서울특별시 강남구 역삼동 858",
+              x: "127.0283079",
+              y: "37.4981647",
+            },
+          ],
+        };
+      },
+      reverseGeocode: async () => ({ results: [] }),
+      directions: async () => ({ route: {} }),
+    };
+    const naverPlaceSearch: NaverPlaceSearchProxy = {
+      isConfigured: () => true,
+      search: async (input) => {
+        calls.push({ operation: "localSearch", input });
+        return {
+          items: [
+            {
+              title: "<b>강남역</b>",
+              address: "서울특별시 강남구 역삼동 858",
+              roadAddress: "서울특별시 강남구 강남대로 396",
+              mapx: "311277",
+              mapy: "552097",
+            },
+          ],
+        };
+      },
+    };
+    const server = buildServer(testConfig, { naverMaps, naverPlaceSearch });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/naver/geocode?query=%EA%B0%95%EB%82%A8%EC%97%AD&count=5",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      places: [
+        {
+          address: "서울특별시 강남구 강남대로 396",
+          jibunAddress: "서울특별시 강남구 역삼동 858",
+          lat: 37.4981647,
+          lng: 127.0283079,
+          name: "강남역",
+          roadAddress: "서울특별시 강남구 강남대로 396",
+        },
+      ],
+    });
+    expect(calls).toEqual([
+      {
+        operation: "localSearch",
+        input: {
+          count: 5,
+          query: "강남역",
+        },
+      },
+      {
+        operation: "geocode",
+        input: {
+          count: 1,
+          query: "서울특별시 강남구 강남대로 396",
+        },
+      },
+    ]);
+  });
+
   it("validates and proxies geocoding requests", async () => {
     const { calls, proxy } = createProxy();
     const server = buildServer(testConfig, { naverMaps: proxy });
