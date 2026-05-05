@@ -36,6 +36,7 @@ export type CreateShareSessionInput = {
 export interface ShareSessionRepository extends ShareSessionAccessRepository {
   create(input: CreateShareSessionInput): Promise<StoredShareSession>;
   listByOwner(ownerId: string, now: Date): Promise<StoredShareSession[]>;
+  findByCode(sessionCode: string, now: Date): Promise<StoredShareSession | null>;
   stop(id: string, ownerId: string): Promise<StoredShareSession | null>;
   delete(id: string, ownerId: string): Promise<boolean>;
   updateLocation(
@@ -84,6 +85,14 @@ export class InMemoryShareSessionRepository implements ShareSessionRepository {
       .filter((session) => session.ownerId === ownerId)
       .map((session) => this.withComputedStatus(session, now))
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  }
+
+  async findByCode(sessionCode: string, now: Date): Promise<StoredShareSession | null> {
+    const session = [...this.sessions.values()].find(
+      (candidate) => candidate.sessionCode === sessionCode,
+    );
+
+    return session ? this.withComputedStatus(session, now) : null;
   }
 
   async stop(id: string, ownerId: string): Promise<StoredShareSession | null> {

@@ -15,6 +15,7 @@ import {
 } from "./sessions/shareSessionRepository";
 import { registerShareSessionRoutes } from "./routes/shareSessions";
 import { registerLocationUpdateRoutes } from "./routes/locationUpdates";
+import { registerPublicTrackingRoutes } from "./routes/publicTracking";
 import { emptyUserRepository, type UserRepository } from "./users/userRepository";
 
 export type ServerDependencies = {
@@ -59,6 +60,9 @@ export function buildServer(
   });
   server.register(registerLocationUpdateRoutes, {
     sessions,
+    shareSessions,
+  });
+  server.register(registerPublicTrackingRoutes, {
     shareSessions,
   });
 

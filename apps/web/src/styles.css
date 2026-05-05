@@ -134,6 +134,19 @@ button {
   padding: 20px;
 }
 
+.tracking-summary {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  margin: 12px;
+}
+
+.tracking-summary h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: 0;
+}
+
 .auth-shell {
   display: grid;
   place-items: center;
@@ -174,6 +187,27 @@ button {
   color: #111827;
   background: #ffffff;
   font: inherit;
+}
+
+.pin-form {
+  display: grid;
+  gap: 12px;
+}
+
+.pin-form label {
+  color: #111827;
+  font-weight: 800;
+}
+
+.pin-form input {
+  min-height: 48px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #111827;
+  background: #ffffff;
+  font: inherit;
+  letter-spacing: 0;
 }
 
 .share-create-form {
@@ -336,6 +370,23 @@ button {
   gap: 16px;
   margin: 12px;
   padding: 16px;
+}
+
+.bottom-panel p {
+  margin: 0;
+}
+
+.tracking-status {
+  display: grid;
+  gap: 4px;
+  color: #64748b;
+  font-weight: 700;
+  text-align: right;
+}
+
+.tracking-status span:first-child {
+  color: #111827;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .broadcast-actions {
