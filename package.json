@@ -1,0 +1,22 @@
+{
+  "name": "bluebluelink",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @bluebluelink/web run dev",
+    "dev:api": "npm --workspace @bluebluelink/api run dev",
+    "build": "npm --workspaces --if-present run build",
+    "test": "npm --workspaces --if-present run test",
+    "lint": "npm --workspaces --if-present run lint",
+    "typecheck": "npm --workspaces --if-present run typecheck"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  }
+}
