@@ -21,15 +21,58 @@ function createProxy(configured = true) {
     },
     async geocode(input) {
       calls.push({ operation: "geocode", input });
-      return { addresses: [] };
+      return {
+        addresses: [
+          {
+            roadAddress: "서울특별시 강남구 강남대로 396",
+            jibunAddress: "서울특별시 강남구 역삼동 858",
+            x: "127.027621",
+            y: "37.497952",
+          },
+        ],
+      };
     },
     async reverseGeocode(input) {
       calls.push({ operation: "reverseGeocode", input });
-      return { results: [] };
+      return {
+        results: [
+          {
+            name: "roadaddr",
+            region: {
+              area1: { name: "서울특별시" },
+              area2: { name: "강남구" },
+              area3: { name: "역삼동" },
+            },
+            land: {
+              name: "강남대로",
+              number1: "396",
+              addition0: {
+                type: "building",
+                value: "강남역",
+              },
+            },
+          },
+        ],
+      };
     },
     async directions(input) {
       calls.push({ operation: "directions", input });
-      return { route: { trafast: [] } };
+      return {
+        route: {
+          trafast: [
+            {
+              summary: {
+                distance: 12500,
+                duration: 1800000,
+              },
+              path: [
+                [127.027621, 37.497952],
+                [126.978, 37.5665],
+              ],
+            },
+          ],
+        },
+      };
     },
   };
 
@@ -47,7 +90,18 @@ describe("Naver Maps proxy routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ addresses: [] });
+    expect(response.json()).toEqual({
+      places: [
+        {
+          address: "서울특별시 강남구 강남대로 396",
+          jibunAddress: "서울특별시 강남구 역삼동 858",
+          lat: 37.497952,
+          lng: 127.027621,
+          name: "서울특별시 강남구 강남대로 396",
+          roadAddress: "서울특별시 강남구 강남대로 396",
+        },
+      ],
+    });
     expect(calls).toEqual([
       {
         operation: "geocode",
@@ -89,6 +143,21 @@ describe("Naver Maps proxy routes", () => {
 
     expect(reverse.statusCode).toBe(200);
     expect(directions.statusCode).toBe(200);
+    expect(reverse.json()).toEqual({
+      address: "서울특별시 강남구 역삼동 강남대로 396",
+      landmarkName: "강남역",
+      roadAddress: "서울특별시 강남구 역삼동 강남대로 396",
+    });
+    expect(directions.json()).toEqual({
+      route: {
+        distanceMeters: 12500,
+        durationSeconds: 1800,
+        path: [
+          { lat: 37.497952, lng: 127.027621 },
+          { lat: 37.5665, lng: 126.978 },
+        ],
+      },
+    });
     expect(calls).toEqual([
       {
         operation: "reverseGeocode",
@@ -162,5 +231,47 @@ describe("Naver Maps proxy routes", () => {
 
     expect(response.statusCode).toBe(502);
     expect(response.json().error.code).toBe("NAVER_MAPS_UNAVAILABLE");
+  });
+
+  it("drops malformed Naver numbers instead of coercing them to zero", async () => {
+    const proxy: NaverMapsProxy = {
+      isConfigured: () => true,
+      geocode: async () => ({
+        addresses: [
+          {
+            roadAddress: "잘못된 좌표",
+            x: "",
+            y: null,
+          },
+        ],
+      }),
+      reverseGeocode: async () => ({ results: [] }),
+      directions: async () => ({
+        route: {
+          trafast: [
+            {
+              summary: {
+                distance: null,
+                duration: "",
+              },
+              path: [[null, ""]],
+            },
+          ],
+        },
+      }),
+    };
+    const server = buildServer(testConfig, { naverMaps: proxy });
+
+    const geocode = await server.inject({
+      method: "GET",
+      url: "/api/naver/geocode?query=%EA%B0%95%EB%82%A8%EC%97%AD",
+    });
+    const directions = await server.inject({
+      method: "GET",
+      url: "/api/naver/directions?startLat=37.4979&startLng=127.0276&goalLat=37.5665&goalLng=126.9780&option=trafast",
+    });
+
+    expect(geocode.json()).toEqual({ places: [] });
+    expect(directions.json()).toEqual({ route: null });
   });
 });

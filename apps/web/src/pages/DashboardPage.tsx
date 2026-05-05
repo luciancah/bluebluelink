@@ -1,7 +1,8 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Clock, Copy, Plus, Radio, Square, Trash2 } from "lucide-react";
+import { Clock, Copy, MapPin, Plus, Radio, Search, Square, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../components/ui/button";
+import { searchNaverPlaces, type NaverPlace } from "../features/naver/naverApi";
 import {
   createShareSession,
   deleteShareSession,
@@ -15,6 +16,9 @@ export function DashboardPage() {
   const [sessionName, setSessionName] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [pinCode, setPinCode] = useState("");
+  const [destinationQuery, setDestinationQuery] = useState("");
+  const [destinationResultQuery, setDestinationResultQuery] = useState("");
+  const [selectedDestination, setSelectedDestination] = useState<NaverPlace | null>(null);
   const sessionsQuery = useQuery({
     queryKey: ["share-sessions"],
     queryFn: listShareSessions,
@@ -24,7 +28,16 @@ export function DashboardPage() {
     onSuccess() {
       setSessionName("");
       setPinCode("");
+      setDestinationQuery("");
+      setDestinationResultQuery("");
+      setSelectedDestination(null);
       queryClient.invalidateQueries({ queryKey: ["share-sessions"] });
+    },
+  });
+  const destinationSearchMutation = useMutation({
+    mutationFn: searchNaverPlaces,
+    onSuccess(_places, query) {
+      setDestinationResultQuery(query);
     },
   });
   const stopMutation = useMutation({
@@ -54,7 +67,19 @@ export function DashboardPage() {
       sessionName,
       durationMinutes,
       ...(pinCode ? { pinCode } : {}),
+      ...(selectedDestination
+        ? {
+            destinationName: selectedDestination.name,
+            destinationLat: selectedDestination.lat,
+            destinationLng: selectedDestination.lng,
+          }
+        : {}),
     });
+  }
+
+  function handleDestinationSearch() {
+    setSelectedDestination(null);
+    destinationSearchMutation.mutate(destinationQuery);
   }
 
   function handleDelete(session: OwnerShareSession) {
@@ -101,6 +126,60 @@ export function DashboardPage() {
               <option value={240}>4시간</option>
             </select>
           </label>
+          <label>
+            목적지
+            <input
+              onChange={(event) => {
+                setDestinationQuery(event.target.value);
+                setDestinationResultQuery("");
+                setSelectedDestination(null);
+              }}
+              placeholder="예: 강남역, 김포공항"
+              type="text"
+              value={destinationQuery}
+            />
+          </label>
+          <Button
+            className="secondary-action"
+            disabled={destinationQuery.trim().length < 2 || destinationSearchMutation.isPending}
+            onClick={handleDestinationSearch}
+            type="button"
+            variant="secondary"
+          >
+            <Search size={18} aria-hidden="true" />
+            목적지 검색
+          </Button>
+          {destinationResultQuery === destinationQuery && destinationSearchMutation.data?.length ? (
+            <div className="destination-results" aria-label="목적지 검색 결과">
+              {destinationSearchMutation.data.map((place) => (
+                <button
+                  className={
+                    selectedDestination?.lat === place.lat &&
+                    selectedDestination.lng === place.lng
+                      ? "destination-result destination-result--selected"
+                      : "destination-result"
+                  }
+                  key={`${place.lat}:${place.lng}:${place.name}`}
+                  onClick={() => {
+                    setSelectedDestination(place);
+                    setDestinationQuery(place.name);
+                  }}
+                  type="button"
+                >
+                  <MapPin size={18} aria-hidden="true" />
+                  <span>
+                    <strong>{place.name}</strong>
+                    <small>{place.roadAddress ?? place.address}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedDestination ? (
+            <p className="destination-selected">
+              선택한 목적지: {selectedDestination.name}
+            </p>
+          ) : null}
           <label>
             PIN 코드 (선택)
             <input

@@ -21,6 +21,9 @@ export type CreateShareSessionInput = {
   sessionName: string;
   durationMinutes: number;
   pinCode?: string;
+  destinationName?: string;
+  destinationLat?: number;
+  destinationLng?: number;
 };
 
 export async function listShareSessions(): Promise<OwnerShareSession[]> {

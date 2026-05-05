@@ -19,6 +19,15 @@ const createShareSessionSchema = z.object({
   destinationName: z.string().trim().min(1).max(120).optional(),
   destinationLat: z.number().min(-90).max(90).optional(),
   destinationLng: z.number().min(-180).max(180).optional(),
+}).refine((value) => {
+  const destinationFields = [
+    value.destinationName,
+    value.destinationLat,
+    value.destinationLng,
+  ];
+  const providedCount = destinationFields.filter((field) => field !== undefined).length;
+
+  return providedCount === 0 || providedCount === destinationFields.length;
 });
 
 export async function registerShareSessionRoutes(

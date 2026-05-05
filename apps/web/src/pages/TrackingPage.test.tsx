@@ -317,6 +317,72 @@ describe("TrackingPage", () => {
     expect(screen.getAllByText("업데이트 지연").length).toBeGreaterThan(0);
     expect(screen.getByText("경로 2개 지점")).toBeTruthy();
   });
+
+  it("prioritizes traffic-aware ETA and route distance when destination directions load", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            session: trackingSession({
+              destinationName: "강남역",
+              destinationLat: 37.497952,
+              destinationLng: 127.027621,
+            }),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            route: {
+              distanceMeters: 12500,
+              durationSeconds: 1800,
+              path: [
+                { lat: 37.3898, lng: 126.95278 },
+                { lat: 37.45, lng: 126.99 },
+                { lat: 37.497952, lng: 127.027621 },
+              ],
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    renderTrackingPage();
+
+    expect(await screen.findByText("도착까지 30분")).toBeTruthy();
+    expect(screen.getByText("12.5km")).toBeTruthy();
+    expect(screen.getByText("강남역")).toBeTruthy();
+    expect(screen.getByText("경로 3개 지점")).toBeTruthy();
+  });
+
+  it("falls back to honest straight-line distance when traffic ETA fails", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            session: trackingSession({
+              destinationName: "강남역",
+              destinationLat: 37.497952,
+              destinationLng: 127.027621,
+            }),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: "NAVER_MAPS_UNAVAILABLE" } }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    renderTrackingPage();
+
+    expect(await screen.findByText(/직선거리/)).toBeTruthy();
+    expect(screen.getByText("교통 ETA 확인 실패")).toBeTruthy();
+  });
 });
 
 class MockEventSource {

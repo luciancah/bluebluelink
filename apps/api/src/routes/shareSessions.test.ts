@@ -172,4 +172,22 @@ describe("share session routes", () => {
 
     expect(create.statusCode).toBe(401);
   });
+
+  it("rejects partial destination payloads", async () => {
+    const { server, cookie } = await buildLoggedInServer();
+
+    const create = await server.inject({
+      method: "POST",
+      url: "/api/share-sessions",
+      headers: { cookie },
+      payload: {
+        sessionName: "부분 목적지",
+        durationMinutes: 60,
+        destinationName: "강남역",
+      },
+    });
+
+    expect(create.statusCode).toBe(400);
+    expect(create.json().error.code).toBe("INVALID_SHARE_SESSION");
+  });
 });

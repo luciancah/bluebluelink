@@ -113,6 +113,107 @@ describe("DashboardPage", () => {
     });
   });
 
+  it("searches a Korean destination and includes it when creating a location share", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessions: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            places: [
+              {
+                address: "서울특별시 강남구 강남대로 396",
+                jibunAddress: "서울특별시 강남구 역삼동 858",
+                lat: 37.497952,
+                lng: 127.027621,
+                name: "강남역",
+                roadAddress: "서울특별시 강남구 강남대로 396",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ session: session({ sessionName: "공항 픽업" }) }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessions: [session({ sessionName: "공항 픽업" })] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    renderDashboard();
+
+    await userEvent.type(await screen.findByLabelText("공유 이름"), "공항 픽업");
+    await userEvent.type(screen.getByLabelText("목적지"), "강남역");
+    await userEvent.click(screen.getByRole("button", { name: "목적지 검색" }));
+    await userEvent.click(await screen.findByRole("button", { name: /강남역/ }));
+    await userEvent.click(screen.getByRole("button", { name: "공유 시작" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/share-sessions",
+        expect.objectContaining({
+          body: JSON.stringify({
+            sessionName: "공항 픽업",
+            durationMinutes: 60,
+            destinationName: "강남역",
+            destinationLat: 37.497952,
+            destinationLng: 127.027621,
+          }),
+        }),
+      );
+    });
+  });
+
+  it("clears stale destination results when the search query changes", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessions: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            places: [
+              {
+                address: "서울특별시 강남구 강남대로 396",
+                jibunAddress: null,
+                lat: 37.497952,
+                lng: 127.027621,
+                name: "강남역",
+                roadAddress: "서울특별시 강남구 강남대로 396",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    renderDashboard();
+
+    await userEvent.type(await screen.findByLabelText("목적지"), "강남역");
+    await userEvent.click(screen.getByRole("button", { name: "목적지 검색" }));
+    expect(await screen.findByRole("button", { name: /강남역/ })).toBeTruthy();
+
+    await userEvent.clear(screen.getByLabelText("목적지"));
+    await userEvent.type(screen.getByLabelText("목적지"), "서울역");
+
+    expect(screen.queryByRole("button", { name: /강남역/ })).toBeNull();
+  });
+
   it("stops and deletes a location share", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     fetchMock

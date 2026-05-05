@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { SharedMap, type MapPoint } from "../components/map/SharedMap";
 import { Button } from "../components/ui/button";
+import { getNaverDirections, type NaverRoute } from "../features/naver/naverApi";
 import {
   getPublicTrackingSession,
   type PublicTrackingSession,
@@ -67,6 +68,36 @@ export function TrackingPage() {
     () => (vehiclePoint && destinationPoint ? [vehiclePoint, destinationPoint] : EMPTY_MAP_ROUTE),
     [destinationPoint, vehiclePoint],
   );
+  const directionsQuery = useQuery({
+    queryKey: [
+      "naver-directions",
+      vehiclePoint?.lat,
+      vehiclePoint?.lng,
+      destinationPoint?.lat,
+      destinationPoint?.lng,
+    ] as const,
+    queryFn: () =>
+      getNaverDirections({
+        goalLat: destinationPoint!.lat,
+        goalLng: destinationPoint!.lng,
+        startLat: vehiclePoint!.lat,
+        startLng: vehiclePoint!.lng,
+      }),
+    enabled: Boolean(vehiclePoint && destinationPoint && !isPinRequired),
+    retry: false,
+  });
+  const routeSummary = getRouteSummary({
+    destinationName: session?.destinationName ?? null,
+    fallbackRoute: mapRoute,
+    route: directionsQuery.data ?? null,
+    routeUnavailable:
+      Boolean(vehiclePoint && destinationPoint) &&
+      (directionsQuery.isError || (directionsQuery.isSuccess && !directionsQuery.data)),
+  });
+  const displayRoute =
+    directionsQuery.data?.path && directionsQuery.data.path.length > 1
+      ? directionsQuery.data.path
+      : mapRoute;
   const refetchTracking = trackingQuery.refetch;
 
   useEffect(() => {
@@ -139,7 +170,7 @@ export function TrackingPage() {
           accuracyMeters={session?.accuracyMeters ?? null}
           destination={destinationPoint}
           isStale={statusCopy.label === "업데이트 지연"}
-          route={mapRoute}
+          route={displayRoute}
           vehicle={vehiclePoint}
         />
       )}
@@ -150,8 +181,15 @@ export function TrackingPage() {
           <p className="muted">{statusCopy.label}</p>
         </div>
         <div className="tracking-status">
+          {routeSummary ? (
+            <>
+              <span className="tracking-status__primary">{routeSummary.primary}</span>
+              <span>{routeSummary.distance}</span>
+              <span>{routeSummary.detail}</span>
+            </>
+          ) : null}
           {coordinates ? <span>{coordinates}</span> : null}
-          <span>{statusCopy.detail}</span>
+          {!routeSummary ? <span>{statusCopy.detail}</span> : null}
         </div>
       </footer>
     </main>
@@ -226,6 +264,76 @@ function getTrackingStatusCopy(session: PublicTrackingSession | undefined, now: 
 
 function formatCoordinates(latitude: number, longitude: number) {
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+function getRouteSummary({
+  destinationName,
+  fallbackRoute,
+  route,
+  routeUnavailable,
+}: {
+  destinationName: string | null;
+  fallbackRoute: MapPoint[];
+  route: NaverRoute | null;
+  routeUnavailable: boolean;
+}) {
+  if (route) {
+    return {
+      primary: `도착까지 ${formatDuration(route.durationSeconds)}`,
+      distance: formatDistance(route.distanceMeters),
+      detail: destinationName ?? "목적지",
+    };
+  }
+
+  if (routeUnavailable && fallbackRoute.length >= 2) {
+    return {
+      primary: `직선거리 ${formatDistance(
+        getStraightLineDistanceMeters(fallbackRoute[0], fallbackRoute[1]),
+      )}`,
+      distance: "교통 ETA 확인 실패",
+      detail: destinationName ?? "목적지까지 직선거리만 표시",
+    };
+  }
+
+  return null;
+}
+
+function formatDuration(durationSeconds: number) {
+  const minutes = Math.max(1, Math.round(durationSeconds / 60));
+
+  if (minutes < 60) {
+    return `${minutes}분`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return remainingMinutes > 0 ? `${hours}시간 ${remainingMinutes}분` : `${hours}시간`;
+}
+
+function formatDistance(distanceMeters: number) {
+  if (distanceMeters < 1000) {
+    return `${Math.round(distanceMeters)}m`;
+  }
+
+  return `${(distanceMeters / 1000).toFixed(1)}km`;
+}
+
+function getStraightLineDistanceMeters(start: MapPoint, end: MapPoint) {
+  const earthRadiusMeters = 6_371_000;
+  const startLat = toRadians(start.lat);
+  const endLat = toRadians(end.lat);
+  const deltaLat = toRadians(end.lat - start.lat);
+  const deltaLng = toRadians(end.lng - start.lng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
 }
 
 function getVehiclePoint(session: PublicTrackingSession | undefined): MapPoint | null {

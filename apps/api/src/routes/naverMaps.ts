@@ -4,6 +4,11 @@ import {
   NAVER_PROXY_RATE_LIMIT,
   type NaverMapsProxy,
 } from "../naver/naverMapsClient";
+import {
+  normalizeNaverDirectionsResponse,
+  normalizeNaverGeocodeResponse,
+  normalizeNaverReverseGeocodeResponse,
+} from "../naver/naverMapsNormalizer";
 import type { RateLimiter } from "../security/rateLimiter";
 
 const NAVER_PROXY_WINDOW_MS = 60 * 1000;
@@ -49,7 +54,9 @@ export async function registerNaverMapsRoutes(
       return sendInvalidNaverRequest(reply);
     }
 
-    return proxyNaver(reply, () => dependencies.naverMaps.geocode(parsed.data));
+    return proxyNaver(reply, async () =>
+      normalizeNaverGeocodeResponse(await dependencies.naverMaps.geocode(parsed.data)),
+    );
   });
 
   server.get("/api/naver/reverse-geocode", async (request, reply) => {
@@ -63,7 +70,11 @@ export async function registerNaverMapsRoutes(
       return sendInvalidNaverRequest(reply);
     }
 
-    return proxyNaver(reply, () => dependencies.naverMaps.reverseGeocode(parsed.data));
+    return proxyNaver(reply, async () =>
+      normalizeNaverReverseGeocodeResponse(
+        await dependencies.naverMaps.reverseGeocode(parsed.data),
+      ),
+    );
   });
 
   server.get("/api/naver/directions", async (request, reply) => {
@@ -77,7 +88,12 @@ export async function registerNaverMapsRoutes(
       return sendInvalidNaverRequest(reply);
     }
 
-    return proxyNaver(reply, () => dependencies.naverMaps.directions(parsed.data));
+    return proxyNaver(reply, async () =>
+      normalizeNaverDirectionsResponse(
+        await dependencies.naverMaps.directions(parsed.data),
+        parsed.data.option,
+      ),
+    );
   });
 }
 
